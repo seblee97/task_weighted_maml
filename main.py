@@ -31,12 +31,12 @@ if __name__ == "__main__":
         experiment_device = torch.device("cpu")
 
     if args.task_type == 'sin':
-        SM = SineMAML(args, experiment_device).to(experiment_device)
+        SM = SineMAML(args, experiment_device)
         # SM._generate_batch(plot=True)
         SM.train()
     elif args.task_type == 'quadratic':
-        QM = QuadraticMAML(args).to(experiment_device)
+        QM = QuadraticMAML(args)
         QM.train()
     elif args.task_type == 'image_classification':
-        IM = ClassificationMAML(args).to(experiment_device)
+        IM = ClassificationMAML(args)
         IM.train()
