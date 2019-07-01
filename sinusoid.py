@@ -44,7 +44,7 @@ class SineMAML(MAML):
         y_batch_tensor = torch.tensor([[y] for y in y_batch]).to(self.device)
         # print(x_batch_tensor, y_batch_tensor)
         # print(x_batch_tensor.shape, y_batch_tensor.shape)
-        print(x_batch_tensor.dtype)
+        # print(x_batch_tensor.dtype)
         return x_batch_tensor, y_batch_tensor
 
     def _compute_loss(self, prediction, ground_truth):

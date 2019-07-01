@@ -9,7 +9,7 @@ import torch
 parser = argparse.ArgumentParser()
 
 parser.add_argument('-task_type', default=None, type=str, help='which task to meta-learn e.g. -sin- for sinusoid regression')
-parser.add_argument('-training_iterations', default=15000, help='number of training iterations (total calls to the outer training loop)')
+parser.add_argument('-training_iterations', default=250000, help='number of training iterations (total calls to the outer training loop)')
 parser.add_argument('-task_batch_size', default=25, help='number of tasks sampled per meta-update (per outer loop)')
 parser.add_argument('-meta_lr', default=0.001, help='the base learning rate of the generator (the outer loop optimiser)')
 parser.add_argument('-inner_update_batch_size', default=10, help='number of examples used for inner gradient update (K for K-shot learning)')
