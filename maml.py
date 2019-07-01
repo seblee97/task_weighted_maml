@@ -127,6 +127,6 @@ class MAML:
         fig = plt.figure()
         plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed')
         plt.plot(plot_x, plot_y_ground_truth)
-        plt.scatter(test_x_batch, test_y_batch, marker='o')
+        plt.scatter(test_x_batch.cpu(), test_y_batch.cpu(), marker='o')
         fig.savefig('prediction_test.png')
         plt.close()
