@@ -125,7 +125,7 @@ class MAML:
         plot_y_prediction = test_network(torch.tensor([[x] for x in plot_x]).to(self.device))
         # print(plot_y_prediction.detach().numpy())
         fig = plt.figure()
-        plt.plot(plot_x, plot_y_prediction.detach().numpy(), linestyle='dashed')
+        plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed')
         plt.plot(plot_x, plot_y_ground_truth)
         plt.scatter(test_x_batch, test_y_batch, marker='o')
         fig.savefig('prediction_test.png')
