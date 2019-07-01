@@ -122,7 +122,7 @@ class MAML:
             test_optimiser.step()
         plot_x = np.linspace(domain_bounds[0], domain_bounds[1], 100)
         plot_y_ground_truth = [plot_test_task(xi) for xi in plot_x]
-        plot_y_prediction = test_network(torch.tensor([[x] for x in plot_x]))
+        plot_y_prediction = test_network(torch.tensor([[x] for x in plot_x]).to(self.device))
         # print(plot_y_prediction.detach().numpy())
         fig = plt.figure()
         plt.plot(plot_x, plot_y_prediction.detach().numpy(), linestyle='dashed')
