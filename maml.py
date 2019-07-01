@@ -82,7 +82,9 @@ class MAML:
         for training_loop in range(self.args.training_iterations):
             if training_loop % self.args.validation_frequency == 0:
                 self.validate()
+            t0 = time.time()
             self.outer_training_loop()
+            print(time.time() - t0)
 
     def validate(self, plot=True):
         overall_validation_loss = 0
