@@ -13,8 +13,9 @@ import matplotlib.pyplot as plt
 
 class SineMAML(MAML):
 
-    def __init__(self, args):
-        self.model = SinusoidalNetwork(args)
+    def __init__(self, args, device):
+        self.device = device
+        self.model = SinusoidalNetwork(args).to(self.device)
         MAML.__init__(self, args)
 
     def _sample_task(self, amplitude_bounds=(1, 5), phase_bounds=(0, math.pi), domain_bounds=(-5, 5), plot=False):
@@ -39,8 +40,8 @@ class SineMAML(MAML):
         """
         x_batch = [random.uniform(domain_bounds[0], domain_bounds[1]) for _ in range(batch_size)]
         y_batch = [task(x) for x in x_batch]
-        x_batch_tensor = torch.tensor([[x] for x in x_batch])
-        y_batch_tensor = torch.tensor([[y] for y in y_batch])
+        x_batch_tensor = torch.tensor([[x] for x in x_batch]).to(self.device)
+        y_batch_tensor = torch.tensor([[y] for y in y_batch]).to(self.device)
         # print(x_batch_tensor, y_batch_tensor)
         # print(x_batch_tensor.shape, y_batch_tensor.shape)
         return x_batch_tensor, y_batch_tensor

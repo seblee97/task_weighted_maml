@@ -20,15 +20,22 @@ parser.add_argument('-validation_frequency', default=200, help='frequency with w
 
 args = parser.parse_args()
 
-
 if __name__ == "__main__":
+    
+    if torch.cuda.is_available():
+        print("Using the GPU")
+        experiment_device = torch.device("cuda")
+    else:
+        print("Using the CPU")
+        experiment_device = torch.device("cpu")
+
     if args.task_type == 'sin':
-        SM = SineMAML(args)
+        SM = SineMAML(args, experiment_device).to(experiment_device)
         # SM._generate_batch(plot=True)
         SM.train()
     elif args.task_type == 'quadratic':
-        QM = QuadraticMAML(args)
+        QM = QuadraticMAML(args).to(experiment_device)
         QM.train()
     elif args.task_type == 'image_classification':
-        IM = ClassificationMAML(args)
+        IM = ClassificationMAML(args).to(experiment_device)
         IM.train()
