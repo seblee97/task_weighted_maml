@@ -25,7 +25,7 @@ if __name__ == "__main__":
     
     if torch.cuda.is_available():
         print("Using the GPU")
-        experiment_device = torch.device("cuda")
+        experiment_device = torch.device("cpu")
     else:
         print("Using the CPU")
         experiment_device = torch.device("cpu")
