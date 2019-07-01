@@ -4,6 +4,7 @@ from quadratic import QuadraticMAML
 from image_classification import ClassificationMAML
 
 import argparse
+import torch
 
 parser = argparse.ArgumentParser()
 
