@@ -18,10 +18,13 @@ parser.add_argument('-num_inner_updates', default=10, help='number of inner grad
 parser.add_argument('-x_dim', default=1, help='dimension of x') #TODO
 parser.add_argument('-validation_task_batch_size', default=10, help='number of tasks to sample and evaluate in each validation loop')
 parser.add_argument('-validation_frequency', default=200, help='frequency with which to perform validation during training')
+parser.add_argument('-checkpoint_path', default=None, type=str, help='path to save model checkpoints')
 
 args = parser.parse_args()
 
 if __name__ == "__main__":
+
+    args.checkpoint_path = 'results/{}/'.format(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S'))
     
     if torch.cuda.is_available():
         print("Using the GPU")

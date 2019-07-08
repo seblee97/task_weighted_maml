@@ -27,7 +27,7 @@ class ModelNetwork(nn.Module):
         raise NotImplementedError("Base class abstract method")
 
 
-class MAML:
+class MAML(ABC):
     #TODO: Make this an abstract base class? Or no need if the model class is abstract and this training orchestration class can be kept general.
 
     def __init__(self, args):
@@ -82,6 +82,8 @@ class MAML:
     def train(self):
         for training_loop in range(self.args.training_iterations):
             if training_loop % self.args.validation_frequency == 0:
+                if self.args.checkpoint_path:
+                    self.checkpoint_model()
                 self.validate()
             # t0 = time.time()
             self.outer_training_loop()
@@ -108,6 +110,12 @@ class MAML:
         print('--- validation loss', overall_validation_loss / self.args.validation_task_batch_size)
         if plot:
             self.plot_test()
+
+    def checkpoint_model(self):
+        os.makedirs(self.args.checkpoint_path, exist_ok=True)
+        timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H-%M-%S')
+        PATH = '{}model_checkpoint_{}.pt'.format(self.args.checkpoint_path, timestamp)
+        torch.save(self.model.state_dict(), PATH)
 
     def plot_test(self, domain_bounds=(-5, 5)):
         """
