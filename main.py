@@ -5,41 +5,45 @@ from image_classification import ClassificationMAML
 
 import argparse
 import torch
+import yaml
+import time
+import datetime
+
+from utils import MAMLParameters
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-task_type', default=None, type=str, help='which task to meta-learn e.g. -sin- for sinusoid regression')
-parser.add_argument('-training_iterations', default=250000, help='number of training iterations (total calls to the outer training loop)')
-parser.add_argument('-task_batch_size', default=25, help='number of tasks sampled per meta-update (per outer loop)')
-parser.add_argument('-meta_lr', default=0.001, help='the base learning rate of the generator (the outer loop optimiser)')
-parser.add_argument('-inner_update_batch_size', default=10, help='number of examples used for inner gradient update (K for K-shot learning)')
-parser.add_argument('-inner_update_lr', default=0.001, help='step size alpha for inner gradient update')
-parser.add_argument('-num_inner_updates', default=10, help='number of inner gradient updates during training')
-parser.add_argument('-x_dim', default=1, help='dimension of x') #TODO
-parser.add_argument('-validation_task_batch_size', default=10, help='number of tasks to sample and evaluate in each validation loop')
-parser.add_argument('-validation_frequency', default=200, help='frequency with which to perform validation during training')
-parser.add_argument('-checkpoint_path', default=None, type=str, help='path to save model checkpoints')
+parser.add_argument('config', type=str, help='path to configuration file for maml experiment')
 
 args = parser.parse_args()
 
 if __name__ == "__main__":
 
-    args.checkpoint_path = 'results/{}/'.format(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S'))
+    with open(args.config, 'r') as yaml_file:
+        params = yaml.load(yaml_file, yaml.SafeLoader)
+
+    maml_parameters = MAMLParameters(params) # create object in which to store experiment parameters
+
+    checkpoint_path = 'results/{}/'.format(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S'))
+    maml_parameters.set_property("checkpoint_path", checkpoint_path)
     
     if torch.cuda.is_available():
         print("Using the GPU")
-        experiment_device = torch.device("cpu")
+        maml_parameters.set_property("device", "GPU")
+        experiment_device = torch.device("gpu")
     else:
         print("Using the CPU")
+        maml_parameters.set_property("device", "CPU")
         experiment_device = torch.device("cpu")
 
-    if args.task_type == 'sin':
-        SM = SineMAML(args, experiment_device)
+    task = maml_parameters.get("task_type")
+    if task == 'sin':
+        SM = SineMAML(maml_parameters, experiment_device)
         # SM._generate_batch(plot=True)
         SM.train()
-    elif args.task_type == 'quadratic':
-        QM = QuadraticMAML(args)
+    elif task == 'quadratic':
+        QM = QuadraticMAML(maml_parameters)
         QM.train()
-    elif args.task_type == 'image_classification':
-        IM = ClassificationMAML(args)
+    elif task == 'image_classification':
+        IM = ClassificationMAML(maml_parameters)
         IM.train()
