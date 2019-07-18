@@ -18,7 +18,7 @@ class SineMAML(MAML):
         self.model = SinusoidalNetwork(params).to(self.device)
         MAML.__init__(self, params)
 
-    def _sample_task(self, amplitude_bounds=(1, 5), phase_bounds=(0, math.pi), domain_bounds=(-5, 5), plot=False):
+    def _sample_task(self, amplitude_bounds=(0.1, 5), phase_bounds=(0, math.pi), domain_bounds=(-5, 5), plot=False):
         amplitude = random.uniform(amplitude_bounds[0], amplitude_bounds[1])
         phase = random.uniform(phase_bounds[0], phase_bounds[1])
         def modified_sin(x):

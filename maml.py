@@ -47,6 +47,9 @@ class MAML(ABC):
 
         self.meta_optimiser = optim.Adam(self.model.parameters(), lr=self.meta_lr)
 
+        # write copy of config_yaml in model_checkpoint_folder
+        self.params.save_configuration(self.checkpoint_path)
+
     @abstractmethod
     def _sample_task(self):
         raise NotImplementedError("Base class abstract method")
@@ -65,7 +68,7 @@ class MAML(ABC):
 
     def outer_training_loop(self):
         meta_update_gradients = []
-        for task in range(self.task_batch_size):
+        for _ in range(self.task_batch_size):
             meta_update_gradient = self.inner_training_loop()
             meta_update_gradients.append(meta_update_gradient)
 
@@ -73,8 +76,7 @@ class MAML(ABC):
         for meta_update_gradient in meta_update_gradients:
             model_state_dict = self.model.state_dict()
             for parameter_name, parameter in model_state_dict.items():
-                # Transform the parameter using...
-                transformed_parameter = parameter + self.meta_lr * meta_update_gradient[parameter_name]
+                transformed_parameter = parameter - self.meta_lr * torch.abs(meta_update_gradient[parameter_name])
                 model_state_dict[parameter_name].copy_(transformed_parameter)
 
     def inner_training_loop(self):
@@ -92,6 +94,8 @@ class MAML(ABC):
         meta_update_samples_x, meta_update_samples_y = self._generate_batch(task=task, batch_size=self.inner_update_batch_size)
         meta_update_prediction = model_copy.forward(meta_update_samples_x)
         meta_update_loss = self._compute_loss(meta_update_prediction, meta_update_samples_y)
+        meta_update_grad = torch.autograd.grad(meta_update_loss, self.model.parameters(), allow_unused=True)
+        import pdb; pdb.set_trace()
         meta_update_loss.backward()
         meta_update_gradients = {param_name: param.grad for param_name, param in model_copy.named_parameters()}
         print("----inner_loss", meta_update_loss)
@@ -108,7 +112,7 @@ class MAML(ABC):
             self.outer_training_loop()
             # print(time.time() - t0)
 
-    def validate(self, visualise=True):
+    def validate(self, visualise=False):
         overall_validation_loss = 0
         for _ in range(self.validation_task_batch_size):
             validation_network = copy.deepcopy(self.model)
@@ -116,16 +120,20 @@ class MAML(ABC):
             validation_task = self._sample_task()
             validation_x_batch, validation_y_batch = self._generate_batch(task=validation_task, batch_size=self.inner_update_batch_size)
             for _ in range(self.num_inner_updates):
+                import pdb; pdb.set_trace()
                 validation_prediction = validation_network.forward(validation_x_batch)
                 validation_loss = self._compute_loss(validation_prediction, validation_y_batch)
                 validation_optimiser.zero_grad()
                 validation_loss.backward()
                 validation_optimiser.step()
-            test_task = self._sample_task()
-            test_x_batch, test_y_batch = self._generate_batch(task=validation_task, batch_size=self.inner_update_batch_size)
-            test_prediction = validation_network(test_x_batch)
-            test_loss = self._compute_loss(test_prediction, test_y_batch)
-            overall_validation_loss += float(test_loss)
+            final_validation_prediction = validation_network.forward(validation_x_batch)
+            final_validation_loss = self._compute_loss(final_validation_prediction, validation_y_batch)
+            # test_task = self._sample_task()
+            # test_x_batch, test_y_batch = self._generate_batch(task=validation_task, batch_size=self.inner_update_batch_size)
+            # test_prediction = validation_network(test_x_batch)
+            # test_loss = self._compute_loss(test_prediction, test_y_batch)
+            overall_validation_loss += float(final_validation_loss)
+        import pdb; pdb.set_trace()
         print('--- validation loss', overall_validation_loss / self.validation_task_batch_size)
         if visualise:
             self.visualise()
