@@ -1,6 +1,8 @@
 import random
 import copy
 import time
+import os
+import datetime
 
 from abc import ABC, abstractmethod
 
@@ -28,7 +30,6 @@ class ModelNetwork(nn.Module):
 
 
 class MAML(ABC):
-    #TODO: Make this an abstract base class? Or no need if the model class is abstract and this training orchestration class can be kept general.
 
     def __init__(self, args):
         self.args = args
@@ -51,16 +52,18 @@ class MAML(ABC):
         raise NotImplementedError("Base class abstract method")
 
     def outer_training_loop(self):
-        meta_update_losses = []
+        meta_update_gradients = []
         for task in range(self.args.task_batch_size):
-            meta_update_loss = self.inner_training_loop()
-            meta_update_losses.append(meta_update_loss)
+            meta_update_gradient = self.inner_training_loop()
+            meta_update_gradients.append(meta_update_gradient)
 
         # meta update
-        for meta_update_loss in meta_update_losses:
-            self.meta_optimiser.zero_grad()
-            meta_update_loss.backward()
-            self.meta_optimiser.step()
+        for meta_update_gradient in meta_update_gradients:
+            model_state_dict = self.model.state_dict()
+            for parameter_name, parameter in model_state_dict.items():
+                # Transform the parameter using...
+                transformed_parameter = parameter + self.args.meta_lr * meta_update_gradient[parameter_name]
+                model_state_dict[parameter_name].copy_(transformed_parameter)
 
     def inner_training_loop(self):
         model_copy = copy.deepcopy(self.model)
@@ -77,7 +80,11 @@ class MAML(ABC):
         meta_update_samples_x, meta_update_samples_y = self._generate_batch(task=task, batch_size=self.args.inner_update_batch_size)
         meta_update_prediction = model_copy.forward(meta_update_samples_x)
         meta_update_loss = self._compute_loss(meta_update_prediction, meta_update_samples_y)
-        return meta_update_loss
+        meta_update_loss.backward()
+        meta_update_gradients = {param_name: param.grad for param_name, param in model_copy.named_parameters()}
+        print("----inner_loss", meta_update_loss)
+        print("----inner network copy params", list(model_copy.parameters()))
+        return meta_update_gradients
 
     def train(self):
         for training_loop in range(self.args.training_iterations):
