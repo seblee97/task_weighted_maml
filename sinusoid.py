@@ -15,22 +15,18 @@ class SineMAML(MAML):
 
     def __init__(self, params, device):
         self.device = device
-        self.model = SinusoidalNetwork(params).to(self.device)
+        self.model_inner = SinusoidalNetwork(params).to(self.device)
         MAML.__init__(self, params)
 
-    def _sample_task(self, amplitude_bounds=(0.1, 5), phase_bounds=(0, math.pi), domain_bounds=(-5, 5), plot=False):
+    def _sample_task(self, amplitude_bounds=(0.1, 5), phase_bounds=(0, math.pi), plot=False):
+        """
+        returns sin function squashed in x direction by a phase parameter sampled randomly between phase_bounds
+        enlarged in the y direction by an apmplitude parameter sampled randomly between amplitude_bounds
+        """
         amplitude = random.uniform(amplitude_bounds[0], amplitude_bounds[1])
         phase = random.uniform(phase_bounds[0], phase_bounds[1])
         def modified_sin(x):
             return amplitude * np.sin(phase * x)
-
-        if plot:
-            fig = plt.figure()
-            x = np.linspace(domain_bounds[0], domain_bounds[1], 100)
-            y = [modified_sin(xi) for xi in x]
-            plt.plot(x, y)
-            fig.savefig('sin_batch_test.png')
-            plt.close()
         return modified_sin
 
     def visualise(self, domain_bounds=(-5, 5)):
@@ -55,10 +51,10 @@ class SineMAML(MAML):
         fig.savefig('prediction_test.png')
         plt.close()
 
-    def _generate_batch(self, task, domain_bounds=(-5, 5), batch_size=10):
+    def _generate_batch(self, task, domain_bounds=(-5, 5), batch_size=10, plot=False):
         """
-        returns sin function squashed in x direction by a phase parameter sampled randomly between phase_bounds
-        enlarged in the y direction by an apmplitude parameter sampled randomly between amplitude_bounds
+        generates an array, x_batch, of B datapoints sampled randomly between domain_bounds
+        and computes the sin of each point in x_batch to produce y_batch.
         """
         x_batch = [random.uniform(domain_bounds[0], domain_bounds[1]) for _ in range(batch_size)]
         y_batch = [task(x) for x in x_batch]
@@ -67,6 +63,14 @@ class SineMAML(MAML):
         # print(x_batch_tensor, y_batch_tensor)
         # print(x_batch_tensor.shape, y_batch_tensor.shape)
         # print(x_batch_tensor.dtype)
+
+        if plot:
+            fig = plt.figure()
+            x = np.linspace(domain_bounds[0], domain_bounds[1], 100)
+            y = [task(xi) for xi in x]
+            plt.plot(x, y)
+            fig.savefig('sin_batch_test.png')
+            plt.close()
         return x_batch_tensor, y_batch_tensor
 
     def _compute_loss(self, prediction, ground_truth):
@@ -74,7 +78,7 @@ class SineMAML(MAML):
         return loss_function(prediction, ground_truth)
 
 
-class SinusoidalNetwork(ModelNetwork):
+class _SinusoidalNetwork(ModelNetwork):
 
     # Make this a more general regression class rather than a Sin specific class?
     def __init__(self, params):
@@ -90,3 +94,34 @@ class SinusoidalNetwork(ModelNetwork):
         x = F.relu(self.linear2(x))
         x = self.linear3(x)
         return x
+
+class SinusoidalNetwork(ModelNetwork):
+
+    # Make this a more general regression class rather than a Sin specific class?
+    def __init__(self, params):
+        ModelNetwork.__init__(self, params)
+
+    def _construct_layers(self):
+
+        for l in range(len(self.layer_dimensions) - 1):
+
+            layer_weight_tensor = torch.Tensor(size=(self.layer_dimensions[l], self.layer_dimensions[l + 1])).to(self.device)
+            layer_weight_tensor.requires_grad = True
+
+            layer_bias_tensor = torch.Tensor(size=[self.layer_dimensions[l + 1]]).to(self.device)
+            layer_bias_tensor.requires_grad = True
+
+            self.weights.append(layer_weight_tensor)
+            self.biases.append(layer_bias_tensor)
+
+        self._reset_parameters()
+
+    def forward(self, x):
+
+        for l in range(len(self.weights) - 1):
+            x = F.linear(x, self.weights[l].t(), self.biases[l])
+            x = F.relu(x)
+    
+        y = F.linear(x, self.weights[-1].t(), self.biases[-1]) # no relu on output layer
+
+        return y
