@@ -7,4 +7,6 @@ inner_update_lr:              0.001         # step size alpha for inner gradient
 num_inner_updates:            1             # number of inner gradient updates during training
 validation_task_batch_size:   10            # number of tasks to sample and evaluate in each validation loop
 validation_frequency:         200           # frequency with which to perform validation during training
-x_dim:                        1             # dimension of x input 
+input_dimension:              1             # dimension of network input 
+network_layers:               [40, 40]      # dimension of layers to be used in network
+output_dimension:             1             # dimension of network output
