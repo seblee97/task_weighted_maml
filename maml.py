@@ -69,6 +69,7 @@ class MAML(ABC):
         self.meta_lr = self.params.get("meta_lr")
         self.inner_update_batch_size = self.params.get("inner_update_batch_size")
         self.num_inner_updates = self.params.get("num_inner_updates")
+        self.validation_num_inner_updates = self.params.get("validation_num_inner_updates")
         self.training_iterations = self.params.get("training_iterations")
         self.validation_frequency = self.params.get("validation_frequency")
         self.checkpoint_path = self.params.get("checkpoint_path")
@@ -201,7 +202,7 @@ class MAML(ABC):
             self.outer_training_loop()
             # print(time.time() - t0)
 
-    def validate(self, step_count: int, visualise: bool=False) -> None:
+    def validate(self, step_count: int, visualise: bool=True) -> None:
         """
         Performs a validation step for loss during training
 
@@ -210,29 +211,54 @@ class MAML(ABC):
         """
 
         overall_validation_loss = 0
+
         for _ in range(self.validation_task_batch_size):
-            validation_network = copy.deepcopy(self.model_outer)
+
+            # initialise list of model iterations (used for visualisation of fine-tuning)
+            validation_model_iterations = []
+
+            # make copies of outer network for use in validation
+            validation_network = copy.deepcopy(self.model_outer).to(self.device)
             validation_optimiser = optim.Adam(validation_network.weights + validation_network.biases, lr=self.inner_update_lr)
+
+            # sample a task for validation fine-tuning
             validation_task = self._sample_task()
             validation_x_batch, validation_y_batch = self._generate_batch(task=validation_task, batch_size=self.inner_update_batch_size)
-            for _ in range(self.num_inner_updates):
+
+            # inner loop update 
+            for _ in range(self.validation_num_inner_updates):
+
+                # prediction of validation batch
                 validation_prediction = validation_network(validation_x_batch)
+
+                # compute loss
                 validation_loss = self._compute_loss(validation_prediction, validation_y_batch)
+
+                # find gradients of validation loss wrt inner model weights
                 validation_update_grad = torch.autograd.grad(validation_loss, validation_network.weights + validation_network.biases)
+
+                # update inner model weights
                 for i in range(len(validation_network.weights)):
                     validation_network.weights[i] = validation_network.weights[i] - self.inner_update_lr * validation_update_grad[i].detach()
                 for j in range(len(validation_network.biases)):
                     validation_network.biases[j] = validation_network.biases[j] - self.inner_update_lr * validation_update_grad[i + j + 1].detach()
-            final_validation_prediction = validation_network(validation_x_batch)
-            final_validation_loss = self._compute_loss(final_validation_prediction, validation_y_batch)
-            # test_task = self._sample_task()
-            # test_x_batch, test_y_batch = self._generate_batch(task=validation_task, batch_size=self.inner_update_batch_size)
-            # test_prediction = validation_network(test_x_batch)
-            # test_loss = self._compute_loss(test_prediction, test_y_batch)
-            overall_validation_loss += float(final_validation_loss)
+
+                current_weights = [w for w in validation_network.weights]
+                current_biases = [w for w in validation_network.biases]
+                validation_model_iterations.append((current_weights, current_biases))
+            
+            # sample a new batch from same validation task for testing fine-tuned model
+            test_x_batch, test_y_batch = self._generate_batch(task=validation_task, batch_size=self.inner_update_batch_size)
+
+            test_prediction = validation_network(test_x_batch)
+            test_loss = self._compute_loss(test_prediction, test_y_batch)
+
+            overall_validation_loss += float(test_loss)
+
+            if visualise:
+                self.visualise(validation_model_iterations, validation_task)
+
         print('--- validation loss @ step {}: {}'.format(step_count, overall_validation_loss / self.validation_task_batch_size))
-        if visualise:
-            self.visualise()
 
     def checkpoint_model(self) -> None:
         """
