@@ -29,26 +29,27 @@ class SineMAML(MAML):
             return amplitude * np.sin(phase * x)
         return modified_sin
 
-    def visualise(self, domain_bounds=(-5, 5)):
-        test_network = copy.deepcopy(self.model)
-        test_optimiser = optim.Adam(test_network.parameters(), lr=self.inner_update_lr)
-        plot_test_task = self._sample_task()
-        test_x_batch, test_y_batch = self._generate_batch(task=plot_test_task, batch_size=self.inner_update_batch_size)
-        for _ in range(self.num_inner_updates):
-            test_prediction = test_network.forward(test_x_batch)
-            test_loss = self._compute_loss(test_prediction, test_y_batch)
-            test_optimiser.zero_grad()
-            test_loss.backward()
-            test_optimiser.step()
+    def visualise(self, model_iterations, task, domain_bounds=(-5, 5)):
+
+        dummy_model = SinusoidalNetwork(self.params)
+
+        # ground truth
         plot_x = np.linspace(domain_bounds[0], domain_bounds[1], 100)
-        plot_y_ground_truth = [plot_test_task(xi) for xi in plot_x]
-        plot_y_prediction = test_network(torch.tensor([[x] for x in plot_x]).to(self.device))
-        # print(plot_y_prediction.detach().numpy())
+        plot_x_tensor = torch.tensor([[x] for x in plot_x]).to(self.device)
+        plot_y_ground_truth = [task(xi) for xi in plot_x]
+
         fig = plt.figure()
-        plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed')
         plt.plot(plot_x, plot_y_ground_truth)
-        plt.scatter(test_x_batch.cpu(), test_y_batch.cpu(), marker='o')
-        fig.savefig('prediction_test.png')
+
+        for (model_weights, model_biases) in model_iterations:
+            
+            dummy_model.weights = model_weights
+            dummy_model.biases = model_biases
+
+            plot_y_prediction = dummy_model(plot_x_tensor)
+            plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed')
+        # plt.scatter(test_x_batch.cpu(), test_y_batch.cpu(), marker='o')
+        fig.savefig(self.params.get("checkpoint_path") + '/prediction_test.png')
         plt.close()
 
     def _generate_batch(self, task, domain_bounds=(-5, 5), batch_size=10, plot=False):
@@ -62,7 +63,7 @@ class SineMAML(MAML):
         y_batch_tensor = torch.tensor([[y] for y in y_batch]).to(self.device)
         # print(x_batch_tensor, y_batch_tensor)
         # print(x_batch_tensor.shape, y_batch_tensor.shape)
-        # print(x_batch_tensor.dtype)
+        # print(x_batch_tensor.dtype)       
 
         if plot:
             fig = plt.figure()
