@@ -124,21 +124,25 @@ class MAML(ABC):
         bias_copies = [b.clone() for b in self.model_outer.biases]
 
         # initialise cumulative gradient to be used in meta update step
-        meta_update_gradients = []
+        meta_update_gradient = [0 for _ in range(len(weight_copies) + len(bias_copies))]
 
         for _ in range(self.task_batch_size):
-            meta_update_gradient = self.inner_training_loop(weight_copies, bias_copies)    
-            meta_update_gradients.append(meta_update_gradient)
+            task_meta_gradient = self.inner_training_loop(weight_copies, bias_copies)  
+            for i in range(len(weight_copies) + len(bias_copies)):
+                meta_update_gradient[i] += task_meta_gradient[i].detach()
 
-        # meta update
-        for meta_update_gradient in meta_update_gradients:
-            
-            # zero previously collected gradients
-            self.meta_optimiser.zero_grad()
-            outer_model_state_dict = self.model_outer.state_dict()
-            for parameter_name, parameter in outer_model_state_dict.items():
-                transformed_parameter = parameter - self.meta_lr * meta_update_gradient[parameter_name] / self.task_batch_size # TODO: change variable name to tasks_per_meta_update
-                outer_model_state_dict[parameter_name].copy_(transformed_parameter)
+        # meta update 
+        # zero previously collected gradients
+        self.meta_optimiser.zero_grad()
+
+        for i in range(len(self.model_outer.weights)):
+            self.model_outer.weights[i].grad = meta_update_gradient[i] / self.task_batch_size
+            meta_update_gradient[i] = 0
+        for j in range(len(self.model_outer.biases)):
+            self.model_outer.biases[j].grad = meta_update_gradient[i + j + 1] / self.task_batch_size
+            meta_update_gradient[i + j + 1] = 0
+
+        self.meta_optimiser.step()
 
     def inner_training_loop(self, weight_copies: List[torch.Tensor], bias_copies: List[torch.Tensor]) -> torch.Tensor:
         """
