@@ -52,7 +52,7 @@ class SineMAML(MAML):
         fig.savefig(self.params.get("checkpoint_path") + '/prediction_test.png')
         plt.close()
 
-    def _generate_batch(self, task, domain_bounds=(-5, 5), batch_size=10, plot=False):
+    def _generate_batch(self, task, domain_bounds=(-5, 5), batch_size=10, plot=False): # Change batch generation to be done in pure PyTorch
         """
         generates an array, x_batch, of B datapoints sampled randomly between domain_bounds
         and computes the sin of each point in x_batch to produce y_batch.
