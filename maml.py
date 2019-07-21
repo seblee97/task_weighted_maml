@@ -4,6 +4,8 @@ import time
 import os
 import datetime
 
+from typing import Any, Tuple, List
+
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -31,14 +33,25 @@ class ModelNetwork(nn.Module):
         self._construct_layers()
 
     @abstractmethod
-    def _construct_layers(self):
+    def _construct_layers(self) -> None:
+        """
+        Build up layers (weights and biases) of network using dimensions specified in configuration
+        """
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Perform forward pass of x through network
+
+        :param x: tensor to be fed through network
+        """
         raise NotImplementedError("Base class abstract method")
 
-    def _reset_parameters(self):
+    def _reset_parameters(self) -> None:
+        """
+        Reset all parameters in network using unifrom Gaussian initialisation
+        """
         for l in range(len(self.layer_dimensions) - 1):
             std = 1. / np.sqrt(self.layer_dimensions[l])
             self.weights[l].data.uniform_(-std, std) # uniform Gaussian initialisation
@@ -71,18 +84,39 @@ class MAML(ABC):
         self.params.save_configuration(self.checkpoint_path)
 
     @abstractmethod
-    def _sample_task(self):
+    def _sample_task(self) -> Any:
+        """
+        Sample specific task from defined distribution of tasks 
+        E.g. one specific sine function from family of sines
+
+        Return type dependent of task family
+        """
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
-    def _generate_batch(self, task, batch_size=25):
+    def _generate_batch(self, task: Any, batch_size: int=25) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Obtain batch of training examples from a sampled task
+
+        :param task: specific task from which to sample x, y pairs
+        :param batch_size: number of x, y pairs to sample for batch
+        """
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
-    def _compute_loss(self, prediction, ground_truth):
+    def _compute_loss(self, prediction: torch.Tensor, ground_truth: torch.Tensor) -> torch.Tensor:
+        """ 
+        Compute loss for prediction based on ground truth
+
+        :param prediction: output of network for x
+        :param ground_trugh: y value ground truth associated with x
+        """
         raise NotImplementedError("Base class abstract method")
 
-    def outer_training_loop(self):
+    def outer_training_loop(self) -> None:
+        """
+        Outer loop of MAML algorithm, consists of multiple inner loops and a meta update step
+        """
 
         # get copies of meta network parameters
         weight_copies = [w.clone() for w in self.model_outer.weights]
@@ -105,7 +139,15 @@ class MAML(ABC):
                 transformed_parameter = parameter - self.meta_lr * meta_update_gradient[parameter_name] / self.task_batch_size # TODO: change variable name to tasks_per_meta_update
                 outer_model_state_dict[parameter_name].copy_(transformed_parameter)
 
-    def inner_training_loop(self, weight_copies, bias_copies):
+    def inner_training_loop(self, weight_copies: List[torch.Tensor], bias_copies: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Inner loop of MAML algorithm, consists of optimisation steps on sampled tasks
+
+        :param weight_copies: copy of weights in network of outer loop
+        :param bias_copies: copy of biases in network of outer loop
+
+        :return meta_update_grad: gradient to be fed to meta update
+        """
 
         # reset network weights to meta network weights
         self.model_inner.weights = [w.clone() for w in weight_copies]
@@ -126,11 +168,11 @@ class MAML(ABC):
             # compute gradients wrt inner model copy
             gradients = torch.autograd.grad(loss, self.model_inner.weights + self.model_inner.biases, create_graph=True, retain_graph=True)
 
-            # update inner model using current model # TODO: HAVE YOU BUILT UP COMPUTATION GRAPH?
+            # update inner model using current model 
             for i in range(len(self.model_inner.weights)):
-                self.model_inner.weights[i] = self.model_inner.weights[i] - self.inner_update_lr * gradients[i]
+                self.model_inner.weights[i] = self.model_inner.weights[i] - self.inner_update_lr * gradients[i].detach()
             for j in range(len(self.model_inner.biases)):
-                self.model_inner.biases[j] = self.model_inner.biases[j] - self.inner_update_lr * gradients[i + j + 1] 
+                self.model_inner.biases[j] = self.model_inner.biases[j] - self.inner_update_lr * gradients[i + j + 1].detach()
 
         # generate x, y tensors for meta update task sample
         meta_update_samples_x, meta_update_samples_y = self._generate_batch(task=task, batch_size=self.inner_update_batch_size)
@@ -146,17 +188,27 @@ class MAML(ABC):
 
         return meta_update_grad
 
-    def train(self):
+    def train(self) -> None:
+        """
+        Training orchestration method, calls outer loop and validation methods
+        """
         for training_loop in range(self.training_iterations):
             if training_loop % self.validation_frequency == 0 and training_loop != 0:
                 if self.checkpoint_path:
                     self.checkpoint_model()
-                self.validate()
+                self.validate(step_count=training_loop)
             # t0 = time.time()
             self.outer_training_loop()
             # print(time.time() - t0)
 
-    def validate(self, visualise=False):
+    def validate(self, step_count: int, visualise: bool=False) -> None:
+        """
+        Performs a validation step for loss during training
+
+        :param step_count: number of steps in training undergone (used for pring statement)
+        :param visualise: whether or not to visualise validation run
+        """
+
         overall_validation_loss = 0
         for _ in range(self.validation_task_batch_size):
             validation_network = copy.deepcopy(self.model_outer)
@@ -168,9 +220,9 @@ class MAML(ABC):
                 validation_loss = self._compute_loss(validation_prediction, validation_y_batch)
                 validation_update_grad = torch.autograd.grad(validation_loss, validation_network.weights + validation_network.biases)
                 for i in range(len(validation_network.weights)):
-                    validation_network.weights[i] = validation_network.weights[i] - self.inner_update_lr * validation_update_grad[i]
+                    validation_network.weights[i] = validation_network.weights[i] - self.inner_update_lr * validation_update_grad[i].detach()
                 for j in range(len(validation_network.biases)):
-                    validation_network.biases[j] = validation_network.biases[j] - self.inner_update_lr * validation_update_grad[i + j + 1]
+                    validation_network.biases[j] = validation_network.biases[j] - self.inner_update_lr * validation_update_grad[i + j + 1].detach()
             final_validation_prediction = validation_network(validation_x_batch)
             final_validation_loss = self._compute_loss(final_validation_prediction, validation_y_batch)
             # test_task = self._sample_task()
@@ -178,18 +230,21 @@ class MAML(ABC):
             # test_prediction = validation_network(test_x_batch)
             # test_loss = self._compute_loss(test_prediction, test_y_batch)
             overall_validation_loss += float(final_validation_loss)
-        print('--- validation loss', overall_validation_loss / self.validation_task_batch_size)
+        print('--- validation loss @ step {}: {}'.format(step_count, overall_validation_loss / self.validation_task_batch_size))
         if visualise:
             self.visualise()
 
-    def checkpoint_model(self):
+    def checkpoint_model(self) -> None:
+        """
+        Save a copy of the outer model up to this point in training
+        """
         os.makedirs(self.checkpoint_path, exist_ok=True)
         timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H-%M-%S')
         PATH = '{}model_checkpoint_{}.pt'.format(self.checkpoint_path, timestamp)
         torch.save(self.model_outer.state_dict(), PATH)
 
     @abstractmethod
-    def visualise(self):
+    def visualise(self) -> None:
         """
         Allow for visualisation of test case. 
         E.g. a function plot for regression or a rollout for RL
