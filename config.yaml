@@ -5,8 +5,9 @@ meta_lr:                      0.001         # the base learning rate of the gene
 inner_update_batch_size:      10            # number of examples used for inner gradient update (k for k-shot learning)
 inner_update_lr:              0.001         # step size alpha for inner gradient update
 num_inner_updates:            1             # number of inner gradient updates during training
+validation_num_inner_updates: 5             # number of inner gradient updates during fine-tuning in validation/testing
 validation_task_batch_size:   10            # number of tasks to sample and evaluate in each validation loop
-validation_frequency:         200           # frequency with which to perform validation during training
+validation_frequency:         2000          # frequency with which to perform validation during training
 input_dimension:              1             # dimension of network input 
 network_layers:               [40, 40]      # dimension of layers to be used in network
 output_dimension:             1             # dimension of network output
