@@ -8,3 +8,5 @@ num_inner_updates:            1             # number of inner gradient updates d
 validation_task_batch_size:   10            # number of tasks to sample and evaluate in each validation loop
 validation_frequency:         200           # frequency with which to perform validation during training
 x_dim:                        1             # dimension of x input 
+
+resume:                       /data/home/tsel/maml/results/2019-07-21-15-56-53/model_checkpoint_18-18-02.pt
