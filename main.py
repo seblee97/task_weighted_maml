@@ -29,11 +29,11 @@ if __name__ == "__main__":
     
     if torch.cuda.is_available():
         print("Using the GPU")
-        maml_parameters.set_property("device", "GPU")
+        maml_parameters.set_property("device", "cuda")
         experiment_device = torch.device("gpu")
     else:
         print("Using the CPU")
-        maml_parameters.set_property("device", "CPU")
+        maml_parameters.set_property("device", "cpu")
         experiment_device = torch.device("cpu")
 
     task = maml_parameters.get("task_type")
