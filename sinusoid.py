@@ -15,7 +15,14 @@ class SineMAML(MAML):
 
     def __init__(self, params, device):
         self.device = device
+
         self.model = SinusoidalNetwork(params).to(self.device)
+        # load previously trained model to continue with
+        if params.get("resume"):
+            model_checkpoint = params.get("resume")
+            print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint))
+            self.model.load_state_dict(torch.load(model_checkpoint))
+
         MAML.__init__(self, params)
 
     def _sample_task(self, amplitude_bounds=(0.1, 5), phase_bounds=(0, math.pi), domain_bounds=(-5, 5), plot=False):
