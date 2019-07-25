@@ -36,7 +36,7 @@ class SineMAML(MAML):
             return amplitude * np.sin(phase * x)
         return modified_sin
 
-    def visualise(self, model_iterations, task, domain_bounds=(-5, 5)):
+    def visualise(self, model_iterations, task, save_name, domain_bounds=(-5, 5)):
 
         dummy_model = SinusoidalNetwork(self.params)
 
@@ -56,7 +56,7 @@ class SineMAML(MAML):
             plot_y_prediction = dummy_model(plot_x_tensor)
             plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed')
         # plt.scatter(test_x_batch.cpu(), test_y_batch.cpu(), marker='o')
-        fig.savefig(self.params.get("checkpoint_path") + '/prediction_test.png')
+        fig.savefig(self.params.get("checkpoint_path") + save_name)
         plt.close()
 
     def _generate_batch(self, task, domain_bounds=(-5, 5), batch_size=10, plot=False): # Change batch generation to be done in pure PyTorch
