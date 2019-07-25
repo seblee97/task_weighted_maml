@@ -262,7 +262,10 @@ class MAML(ABC):
             overall_validation_loss += float(test_loss)
 
             if visualise:
-                self.visualise(validation_model_iterations, validation_task, save_name='validation_step_{}_rep_{}.png'.format(step_count, r))
+                save_name = 'validation_step_{}_rep_{}.png'.format(step_count, r)
+                self.visualise(
+                    validation_model_iterations, validation_task, validation_x_batch, validation_y_batch, save_name=save_name
+                    )
 
         print('--- validation loss @ step {}: {}'.format(step_count, overall_validation_loss / self.validation_task_batch_size))
 
