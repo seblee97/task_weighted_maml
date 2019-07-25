@@ -36,7 +36,7 @@ class SineMAML(MAML):
             return amplitude * np.sin(phase * x)
         return modified_sin
 
-    def visualise(self, model_iterations, task, save_name, domain_bounds=(-5, 5)):
+    def visualise(self, model_iterations, task, validation_x, validation_y, save_name, domain_bounds=(-5, 5)):
 
         dummy_model = SinusoidalNetwork(self.params)
 
@@ -46,16 +46,23 @@ class SineMAML(MAML):
         plot_y_ground_truth = [task(xi) for xi in plot_x]
 
         fig = plt.figure()
-        plt.plot(plot_x, plot_y_ground_truth)
+        plt.plot(plot_x, plot_y_ground_truth, label="Ground Truth")
 
-        for (model_weights, model_biases) in model_iterations:
+        for i, (model_weights, model_biases) in enumerate(model_iterations):
             
             dummy_model.weights = model_weights
             dummy_model.biases = model_biases
 
             plot_y_prediction = dummy_model(plot_x_tensor)
-            plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed')
-        # plt.scatter(test_x_batch.cpu(), test_y_batch.cpu(), marker='o')
+            plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed', label='Fine-tuned MAML {} update'.format(i))
+
+        plt.scatter(validation_x.cpu(), validation_y.cpu(), marker='o', label='K Points')
+
+        plt.title("Validation of Sinusoid Meta-Regression")
+        plt.xlabel(r"x")
+        plt.ylabel(r"sin(x)")
+        plt.legend()
+        
         fig.savefig(self.params.get("checkpoint_path") + save_name)
         plt.close()
 
