@@ -216,7 +216,7 @@ class MAML(ABC):
 
         overall_validation_loss = 0
 
-        for _ in range(self.validation_task_batch_size):
+        for r in range(self.validation_task_batch_size):
 
             # initialise list of model iterations (used for visualisation of fine-tuning)
             validation_model_iterations = []
@@ -228,6 +228,8 @@ class MAML(ABC):
             # sample a task for validation fine-tuning
             validation_task = self._sample_task()
             validation_x_batch, validation_y_batch = self._generate_batch(task=validation_task, batch_size=self.inner_update_batch_size)
+
+            validation_model_iterations.append(([w for w in validation_network.weights], [b for b in validation_network.biases]))
 
             # inner loop update 
             for _ in range(self.validation_num_inner_updates):
@@ -260,7 +262,7 @@ class MAML(ABC):
             overall_validation_loss += float(test_loss)
 
             if visualise:
-                self.visualise(validation_model_iterations, validation_task)
+                self.visualise(validation_model_iterations, validation_task, save_name='validation_step_{}_rep_{}.png'.format(step_count, r))
 
         print('--- validation loss @ step {}: {}'.format(step_count, overall_validation_loss / self.validation_task_batch_size))
 
