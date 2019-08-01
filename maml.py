@@ -4,6 +4,8 @@ import time
 import os
 import datetime
 
+from tensorboardX import SummaryWriter
+
 from typing import Any, Tuple, List
 
 from abc import ABC, abstractmethod
@@ -61,7 +63,9 @@ class ModelNetwork(nn.Module):
 class MAML(ABC):
 
     def __init__(self, params):
-        self.params = params 
+        self.params = params
+
+        self.writer = SummaryWriter() 
 
         # extract relevant parameters
         self.task_batch_size = self.params.get("task_batch_size")
@@ -74,6 +78,16 @@ class MAML(ABC):
         self.validation_frequency = self.params.get("validation_frequency")
         self.checkpoint_path = self.params.get("checkpoint_path")
         self.validation_task_batch_size = self.params.get("validation_task_batch_size")
+        self.fixed_validation = self.params.get("fixed_validation")
+
+        # load previously trained model to continue with
+        if self.params.get("resume"):
+            model_checkpoint = self.params.get("resume")
+            try:
+                print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint))
+                self.model_inner.load_state_dict(torch.load(model_checkpoint))
+            except:
+                raise FileNotFoundError("Resume checkpoint specified in config does not exist.")
         
         self.model_outer = copy.deepcopy(self.model_inner).to(self.device)
 
@@ -215,8 +229,11 @@ class MAML(ABC):
         """
 
         overall_validation_loss = 0
+        validation_figures = []
 
-        for r in range(self.validation_task_batch_size):
+        validation_tasks = _get_validation_tasks(self)
+
+        for r, val_task in enumerate(validation_tasks):
 
             # initialise list of model iterations (used for visualisation of fine-tuning)
             validation_model_iterations = []
@@ -226,8 +243,7 @@ class MAML(ABC):
             validation_optimiser = optim.Adam(validation_network.weights + validation_network.biases, lr=self.inner_update_lr)
 
             # sample a task for validation fine-tuning
-            validation_task = self._sample_task()
-            validation_x_batch, validation_y_batch = self._generate_batch(task=validation_task, batch_size=self.inner_update_batch_size)
+            validation_x_batch, validation_y_batch = self._generate_batch(task=val_task, batch_size=self.inner_update_batch_size)
 
             validation_model_iterations.append(([w for w in validation_network.weights], [b for b in validation_network.biases]))
 
@@ -254,7 +270,7 @@ class MAML(ABC):
                 validation_model_iterations.append((current_weights, current_biases))
             
             # sample a new batch from same validation task for testing fine-tuned model
-            test_x_batch, test_y_batch = self._generate_batch(task=validation_task, batch_size=self.inner_update_batch_size)
+            test_x_batch, test_y_batch = self._generate_batch(task=val_task, batch_size=self.inner_update_batch_size)
 
             test_prediction = validation_network(test_x_batch)
             test_loss = self._compute_loss(test_prediction, test_y_batch)
@@ -263,11 +279,30 @@ class MAML(ABC):
 
             if visualise:
                 save_name = 'validation_step_{}_rep_{}.png'.format(step_count, r)
-                self.visualise(
-                    validation_model_iterations, validation_task, validation_x_batch, validation_y_batch, save_name=save_name
+                validation_fig = self.visualise(
+                    validation_model_iterations, val_task, validation_x_batch, validation_y_batch, save_name=save_name
                     )
+                validation_figures.append(validation_fig)
 
         print('--- validation loss @ step {}: {}'.format(step_count, overall_validation_loss / self.validation_task_batch_size))
+        self.writer.add_scalar('experiment/meta_validation_loss', overall_validation_loss / self.validation_task_batch_size, step_count)
+        for f, fig in enumerate(validation_figures):
+            self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
+
+    def _get_validation_tasks(self):
+        """produces set of tasks for use in validation"""
+        if self.fixed_validation:
+            return self._get_fixed_validation_tasks(self)
+        else:
+            return [self._sample_task() for _ in range(self.validation_task_batch_size)]
+
+    @abstractmethod
+    def _get_fixed_validation_tasks(self):
+        """
+        If using fixed validation this method returns a set of tasks that are 
+        'representative' of the task distribution in some meaningful way.
+        """
+        raise NotImplementedError("Base class method")
 
     def checkpoint_model(self) -> None:
         """
