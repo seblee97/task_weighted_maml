@@ -86,8 +86,11 @@ class MAML(ABC):
             try:
                 print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint))
                 self.model_inner.load_state_dict(torch.load(model_checkpoint))
+                self.start_iteration = float(model_checkpoint.split('_')[-1])
             except:
                 raise FileNotFoundError("Resume checkpoint specified in config does not exist.")
+        else:
+            self.start_iteration = 0
         
         self.model_outer = copy.deepcopy(self.model_inner).to(self.device)
 
@@ -211,11 +214,11 @@ class MAML(ABC):
         """
         Training orchestration method, calls outer loop and validation methods
         """
-        for training_loop in range(self.training_iterations):
-            if training_loop % self.validation_frequency == 0 and training_loop != 0:
+        for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
+            if step_count % self.validation_frequency == 0 and training_loop != 0:
                 if self.checkpoint_path:
-                    self.checkpoint_model()
-                self.validate(step_count=training_loop)
+                    self.checkpoint_model(step_count=step_count)
+                self.validate(step_count=step_count)
             # t0 = time.time()
             self.outer_training_loop()
             # print(time.time() - t0)
@@ -310,7 +313,8 @@ class MAML(ABC):
         """
         os.makedirs(self.checkpoint_path, exist_ok=True)
         timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H-%M-%S')
-        PATH = '{}model_checkpoint_{}.pt'.format(self.checkpoint_path, timestamp)
+        # format of model chekcpoint path: timestamp _ step_count
+        PATH = '{}model_checkpoint_{}_{}.pt'.format(self.checkpoint_path, timestamp, str(step_count))
         torch.save(self.model_outer.state_dict(), PATH)
 
     @abstractmethod
