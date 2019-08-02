@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 import torch
 from torch import optim
 from torch import nn
-
 class ModelNetwork(nn.Module):
     
     def __init__(self, params):
@@ -215,7 +214,7 @@ class MAML(ABC):
         Training orchestration method, calls outer loop and validation methods
         """
         for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
-            if step_count % self.validation_frequency == 0 and training_loop != 0:
+            if step_count % self.validation_frequency == 0 and step_count != 0:
                 if self.checkpoint_path:
                     self.checkpoint_model(step_count=step_count)
                 self.validate(step_count=step_count)
@@ -234,7 +233,7 @@ class MAML(ABC):
         overall_validation_loss = 0
         validation_figures = []
 
-        validation_tasks = _get_validation_tasks(self)
+        validation_tasks = self._get_validation_tasks()
 
         for r, val_task in enumerate(validation_tasks):
 
@@ -295,7 +294,7 @@ class MAML(ABC):
     def _get_validation_tasks(self):
         """produces set of tasks for use in validation"""
         if self.fixed_validation:
-            return self._get_fixed_validation_tasks(self)
+            return self._get_fixed_validation_tasks()
         else:
             return [self._sample_task() for _ in range(self.validation_task_batch_size)]
 
@@ -307,9 +306,11 @@ class MAML(ABC):
         """
         raise NotImplementedError("Base class method")
 
-    def checkpoint_model(self) -> None:
+    def checkpoint_model(self, step_count: int) -> None:
         """
         Save a copy of the outer model up to this point in training
+
+        :param step_count: iteration number of training (meta-steps)
         """
         os.makedirs(self.checkpoint_path, exist_ok=True)
         timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H-%M-%S')
@@ -324,3 +325,5 @@ class MAML(ABC):
         E.g. a function plot for regression or a rollout for RL
         """
         raise NotImplementedError("Base class abstract method")
+
+        
