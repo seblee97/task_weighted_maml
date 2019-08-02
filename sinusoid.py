@@ -17,9 +17,9 @@ class SineMAML(MAML):
         self.device = device
 
         # extract relevant task-specific parameters
-        self.amplitude_bounds = params.get('amplitude_bounds')
-        self.domain_bounds = params.get('domain_bounds')
-        degree_phase_bounds = params.get('phase_bounds') # phase given in degrees
+        self.amplitude_bounds = params.get(['sin', 'amplitude_bounds'])
+        self.domain_bounds = params.get(['sin', 'domain_bounds'])
+        degree_phase_bounds = params.get(['sin', 'phase_bounds']) # phase given in degrees
 
         # convert phase bounds from degrees to radians
         self.phase_bounds = [
@@ -102,21 +102,22 @@ class SineMAML(MAML):
 
         In the case of sinusoidal regression we split the parameter space equally.
         """
+        import pdb; pdb.set_trace()
         # mesh of equally partitioned state space
         split_per_parameter_dim = round(np.sqrt(self.validation_task_batch_size))
         amplitude_range = self.amplitude_bounds[1] - self.amplitude_bounds[0]
         phase_range = self.phase_bounds[1] - self.phase_bounds[0]
 
-        amplitude_spectrum, phase_spectrum = np.mgrid(
-            self.amplitude_bounds[0] : self.amplitude_bounds[1] : amplitude_range / split_per_parameter_dim,
-            self.phase_bounds[0] : self.phase_bounds[1] : phase_range / split_per_parameter_dim
-            )
+        amplitude_spectrum, phase_spectrum = np.mgrid[
+            self.amplitude_bounds[0]:self.amplitude_bounds[1]:complex(0, amplitude_range / split_per_parameter_dim),
+            self.phase_bounds[0]:self.phase_bounds[1]:complex(0, phase_range / split_per_parameter_dim)
+            ]
 
         parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
 
         fixed_validation_tasks = []
 
-        for param_pair in parameter_space_splits:
+        for param_pair in parameter_space_tuples:
             def modified_sin(x):
                 return param_pair[0] * np.sin(param_pair[1] * x)
             fixed_validation_tasks.append(modified_sin)
