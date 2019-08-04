@@ -15,49 +15,70 @@ class SineMAML(MAML):
 
     def __init__(self, params, device):
         self.device = device
+
+        # extract relevant task-specific parameters
+        self.amplitude_bounds = params.get(['sin', 'amplitude_bounds'])
+        self.domain_bounds = params.get(['sin', 'domain_bounds'])
+        degree_phase_bounds = params.get(['sin', 'phase_bounds']) # phase given in degrees
+
+        # convert phase bounds from degrees to radians
+        self.phase_bounds = [
+            degree_phase_bounds[0] * (2 * np.pi) / 360, degree_phase_bounds[1] * (2 * np.pi) / 360
+            ]
+
         self.model_inner = SinusoidalNetwork(params).to(self.device)
+
         MAML.__init__(self, params)
 
-    def _sample_task(self, amplitude_bounds=(0.1, 5), phase_bounds=(0, math.pi), plot=False):
+    def _sample_task(self, plot=False):
         """
         returns sin function squashed in x direction by a phase parameter sampled randomly between phase_bounds
         enlarged in the y direction by an apmplitude parameter sampled randomly between amplitude_bounds
         """
-        amplitude = random.uniform(amplitude_bounds[0], amplitude_bounds[1])
-        phase = random.uniform(phase_bounds[0], phase_bounds[1])
+        amplitude = random.uniform(self.amplitude_bounds[0], self.amplitude_bounds[1])
+        phase = random.uniform(self.phase_bounds[0], self.phase_bounds[1])
         def modified_sin(x):
             return amplitude * np.sin(phase * x)
         return modified_sin
 
-    def visualise(self, model_iterations, task, domain_bounds=(-5, 5)):
+    def visualise(self, model_iterations, task, validation_x, validation_y, save_name):
 
         dummy_model = SinusoidalNetwork(self.params)
 
         # ground truth
-        plot_x = np.linspace(domain_bounds[0], domain_bounds[1], 100)
+        plot_x = np.linspace(self.domain_bounds[0], self.domain_bounds[1], 100)
         plot_x_tensor = torch.tensor([[x] for x in plot_x]).to(self.device)
         plot_y_ground_truth = [task(xi) for xi in plot_x]
 
         fig = plt.figure()
-        plt.plot(plot_x, plot_y_ground_truth)
+        plt.plot(plot_x, plot_y_ground_truth, label="Ground Truth")
 
-        for (model_weights, model_biases) in model_iterations:
+        for i, (model_weights, model_biases) in enumerate(model_iterations):
             
             dummy_model.weights = model_weights
             dummy_model.biases = model_biases
 
             plot_y_prediction = dummy_model(plot_x_tensor)
-            plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed')
-        # plt.scatter(test_x_batch.cpu(), test_y_batch.cpu(), marker='o')
-        fig.savefig(self.params.get("checkpoint_path") + '/prediction_test.png')
+            plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed', label='Fine-tuned MAML {} update'.format(i))
+
+        plt.scatter(validation_x.cpu(), validation_y.cpu(), marker='o', label='K Points')
+
+        plt.title("Validation of Sinusoid Meta-Regression")
+        plt.xlabel(r"x")
+        plt.ylabel(r"sin(x)")
+        plt.legend()
+        
+        # fig.savefig(self.params.get("checkpoint_path") + save_name)
         plt.close()
 
-    def _generate_batch(self, task, domain_bounds=(-5, 5), batch_size=10, plot=False): # Change batch generation to be done in pure PyTorch
+        return fig
+
+    def _generate_batch(self, task, batch_size=10, plot=False): # Change batch generation to be done in pure PyTorch
         """
         generates an array, x_batch, of B datapoints sampled randomly between domain_bounds
         and computes the sin of each point in x_batch to produce y_batch.
         """
-        x_batch = [random.uniform(domain_bounds[0], domain_bounds[1]) for _ in range(batch_size)]
+        x_batch = [random.uniform(self.domain_bounds[0], self.domain_bounds[1]) for _ in range(batch_size)]
         y_batch = [task(x) for x in x_batch]
         x_batch_tensor = torch.tensor([[x] for x in x_batch]).to(self.device)
         y_batch_tensor = torch.tensor([[y] for y in y_batch]).to(self.device)
@@ -67,12 +88,41 @@ class SineMAML(MAML):
 
         if plot:
             fig = plt.figure()
-            x = np.linspace(domain_bounds[0], domain_bounds[1], 100)
+            x = np.linspace(self.domain_bounds[0], self.domain_bounds[1], 100)
             y = [task(xi) for xi in x]
             plt.plot(x, y)
             fig.savefig('sin_batch_test.png')
             plt.close()
         return x_batch_tensor, y_batch_tensor
+
+    def _get_fixed_validation_tasks(self):
+        """
+        If using fixed validation this method returns a set of tasks that are 
+        'representative' of the task distribution in some meaningful way. 
+
+        In the case of sinusoidal regression we split the parameter space equally.
+        """
+        import pdb; pdb.set_trace()
+        # mesh of equally partitioned state space
+        split_per_parameter_dim = round(np.sqrt(self.validation_task_batch_size))
+        amplitude_range = self.amplitude_bounds[1] - self.amplitude_bounds[0]
+        phase_range = self.phase_bounds[1] - self.phase_bounds[0]
+
+        amplitude_spectrum, phase_spectrum = np.mgrid[
+            self.amplitude_bounds[0]:self.amplitude_bounds[1]:complex(0, amplitude_range / split_per_parameter_dim),
+            self.phase_bounds[0]:self.phase_bounds[1]:complex(0, phase_range / split_per_parameter_dim)
+            ]
+
+        parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
+
+        fixed_validation_tasks = []
+
+        for param_pair in parameter_space_tuples:
+            def modified_sin(x):
+                return param_pair[0] * np.sin(param_pair[1] * x)
+            fixed_validation_tasks.append(modified_sin)
+
+        return fixed_validation_tasks
 
     def _compute_loss(self, prediction, ground_truth):
         loss_function = nn.MSELoss()

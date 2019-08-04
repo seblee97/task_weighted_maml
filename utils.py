@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, List, Union
 
 import yaml
 import os
@@ -8,14 +8,23 @@ class MAMLParameters(object):
     def __init__(self, parameters):
         self._config = parameters
     
-    def get(self, property_name: str) -> Any:
+    def get(self, property_name: Union[str, List[str]]) -> Any:
         """
         Return value associated with property_name in configuration
 
-        :param property_name: name of parameter in configuration
+        :param property_name: name of parameter in configuration. 
+                              Could be list if accessing nested part of dict.
         :return: value associated with property_name
         """
-        return self._config.get(property_name, "Unknown Key")
+        if type(property_name) == list:
+            value = self._config
+            for prop in property_name:
+                value = value.get(prop, "Unknown Key")
+            return value
+        elif type(property_name) == str:
+            return self._config.get(property_name, "Unknown Key")
+        else:
+            raise TypeError("property_name supplied has wrong type. Must be list of strings or string.")
 
     def get_property_description(self, property_name: str) -> str:
         """
