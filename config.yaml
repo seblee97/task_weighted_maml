@@ -1,24 +1,33 @@
-task_type:                    sin           # which task to meta-learn e.g. sin- for sinusoid regression
-training_iterations:          250000        # number of training iterations (total calls to the outer training loop)
-task_batch_size:              25            # number of tasks sampled per meta-update (per outer loop)
-meta_lr:                      0.001         # the base learning rate of the generator (the outer loop optimiser)
-inner_update_batch_size:      10            # number of examples used for inner gradient update (k for k-shot learning)
-inner_update_lr:              0.001         # step size alpha for inner gradient update
-num_inner_updates:            1             # number of inner gradient updates during training
-validation_num_inner_updates: 5             # number of inner gradient updates during fine-tuning in validation/testing
-validation_task_batch_size:   10            # number of tasks to sample and evaluate in each validation loop
-validation_frequency:         2000          # frequency with which to perform validation during training
-x_dim:                        1             # dimension of x input 
-input_dimension:              1             # dimension of network input 
-network_layers:               [40, 40]      # dimension of layers to be used in network
-output_dimension:             1             # dimension of network output
-fixed_validation:             True          # whether to sample randomly during validation or use fixed structured validation tasks
+task_type:                    sin                       # which task to meta-learn e.g. sin- for sinusoid regression
+training_iterations:          250000                    # number of training iterations (total calls to the outer training loop)
+task_batch_size:              25                        # number of tasks sampled per meta-update (per outer loop)
+meta_lr:                      0.001                     # the base learning rate of the generator (the outer loop optimiser)
+inner_update_batch_size:      10                        # number of examples used for inner gradient update (k for k-shot learning)
+inner_update_lr:              0.001                     # step size alpha for inner gradient update
+num_inner_updates:            1                         # number of inner gradient updates during training
+validation_num_inner_updates: 5                         # number of inner gradient updates during fine-tuning in validation/testing
+validation_task_batch_size:   10                        # number of tasks to sample and evaluate in each validation loop
+validation_frequency:         2000                      # frequency with which to perform validation during training
+x_dim:                        1                         # dimension of x input 
+input_dimension:              1                         # dimension of network input 
+network_layers:               [40, 40]                  # dimension of layers to be used in network
+output_dimension:             1                         # dimension of network output
+fixed_validation:             False                     # whether to sample randomly during validation or use fixed structured validation tasks
+priority_sample:              True                      # whether to use a priority queue in sampling the inner loop task
 
 resume:
   
-# Task-specific configurations
+# task-specific configurations
 sin: 
-  domain_bounds:              [-5, 5]       # domain (x) over which points can be sampled for sin regression
-  amplitude_bounds:           [0.1, 5]      # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
-  phase_bounds:               [0, 180]      # sample range for phase squeeze of sine curve to be regressed (note will be converted to radians in python)
+  domain_bounds:              [-5, 5]                   # domain (x) over which points can be sampled for sin regression
+  amplitude_bounds:           [0.1, 5]                  # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
+  phase_bounds:               [0, 180]                  # sample range for phase squeeze of sine curve to be regressed (note will be converted to radians in python)
   
+# priority queue configuration
+
+priority_queue:
+  sample_type:                'e_greedy'                # type of sampling from priority_queue (max, e_greedy, or interpolate)
+  epislon:                    0.1                       # probability of taking
+  block_sizes:                [5, 5]                    # size of block in each dimension of parameter space in which to discretize priority queue
+  param_ranges:               [[0.1, 5], [0, 180]]      # range of parameters over whih priority queue is sampled
+  burn_in:                                              # if using argmax without epsilon greedy, need a burn-in to 'fill' priority queue buffer
