@@ -11,6 +11,8 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 
+from typing import Any, Dict
+
 class SineMAML(MAML):
 
     def __init__(self, params, device):
@@ -39,6 +41,21 @@ class SineMAML(MAML):
         phase = random.uniform(self.phase_bounds[0], self.phase_bounds[1])
         def modified_sin(x):
             return amplitude * np.sin(phase * x)
+        return modified_sin
+
+    def _get_task_from_params(self, parameters: Dict[str, Any]) -> Any:
+        """
+        Return sine function defined by parameters given
+
+        :param parameters: parameters defining the specific sin task in the distribution
+
+        :return modified_sin: sin function
+
+        (method differs from _sample_task in that it is not a random sample but
+        defined by parameters given)
+        """
+        def modified_sin(x):
+            return parameters["amplitude"] * np.sin(parameters["phase"] * x)
         return modified_sin
 
     def visualise(self, model_iterations, task, validation_x, validation_y, save_name):
@@ -102,7 +119,6 @@ class SineMAML(MAML):
 
         In the case of sinusoidal regression we split the parameter space equally.
         """
-        import pdb; pdb.set_trace()
         # mesh of equally partitioned state space
         split_per_parameter_dim = round(np.sqrt(self.validation_task_batch_size))
         amplitude_range = self.amplitude_bounds[1] - self.amplitude_bounds[0]
@@ -112,6 +128,9 @@ class SineMAML(MAML):
             self.amplitude_bounds[0]:self.amplitude_bounds[1]:complex(0, amplitude_range / split_per_parameter_dim),
             self.phase_bounds[0]:self.phase_bounds[1]:complex(0, phase_range / split_per_parameter_dim)
             ]
+
+        print("---a spectrum", amplitude_spectrum)
+        print("---p spectrum", phase_spectrum)
 
         parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
 
