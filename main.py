@@ -9,7 +9,7 @@ import yaml
 import time
 import datetime
 
-from utils import MAMLParameters
+from utils.parameters import MAMLParameters
 
 parser = argparse.ArgumentParser()
 

@@ -6,7 +6,7 @@ import datetime
 
 from tensorboardX import SummaryWriter
 
-from typing import Any, Tuple, List
+from typing import Any, Tuple, List, Dict
 
 from abc import ABC, abstractmethod
 
@@ -16,6 +16,9 @@ import matplotlib.pyplot as plt
 import torch
 from torch import optim
 from torch import nn
+
+from utils.priority import PriorityQueue
+
 class ModelNetwork(nn.Module):
     
     def __init__(self, params):
@@ -32,6 +35,18 @@ class ModelNetwork(nn.Module):
                                 + [self.params.get("output_dimension")]
 
         self._construct_layers()
+
+        # if using priority queue for inner loop sampling, initialise 
+        if self.params.get("priority_sample"):
+            self.priority_queue = PriorityQueue(
+                sample_type=self.params.get(["priority_queue", "sample_type"]),
+                block_sizes=self.params.get(["priority_queue", "block_sizes"]),
+                burn_in=self.params.get(["priority_queue", "burn_in"])
+                )
+
+            if self.params.get(["priority_queue", "burn_in"]) is not None:
+                raise NotImplementedError("Burn in functionality not yet implemented")
+                self._fill_pq_buffer()
 
     @abstractmethod
     def _construct_layers(self) -> None:
@@ -111,6 +126,21 @@ class MAML(ABC):
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
+    def _get_task_from_params(self, parameters: Dict[str, Any]) -> Any:
+        """
+        Get specific task from specific given parameters 
+        E.g. one specific sine function from family of sines
+
+        :param parameters: parameters defining the specific task in the distribution
+
+        Return type dependent of task family
+
+        (method differs from _sample_task in that it is not a random sample but
+        defined by parameters given)
+        """
+        raise NotImplementedError("Base class abstract method")
+
+    @abstractmethod
     def _generate_batch(self, task: Any, batch_size: int=25) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Obtain batch of training examples from a sampled task
@@ -147,7 +177,7 @@ class MAML(ABC):
             for i in range(len(weight_copies) + len(bias_copies)):
                 meta_update_gradient[i] += task_meta_gradient[i].detach()
 
-        # meta update 
+        # meta update
         # zero previously collected gradients
         self.meta_optimiser.zero_grad()
 
@@ -175,7 +205,11 @@ class MAML(ABC):
         self.model_inner.biases = [b.clone() for b in bias_copies]
 
         # sample a task from task distribution and generate x, y tensors for that task
-        task = self._sample_task()
+        if self.priority_sample:
+            task_parameters = self.priority_queue.query()
+            task = self._get_task_from_params()
+        else:
+            task = self._sample_task()
         x_batch, y_batch = self._generate_batch(task=task, batch_size=self.inner_update_batch_size)
 
         for _ in range(self.num_inner_updates):
@@ -203,6 +237,9 @@ class MAML(ABC):
 
         # compute loss
         meta_update_loss = self._compute_loss(meta_update_prediction, meta_update_samples_y)
+
+        if self.priority_sample:
+            self.priority_queue.insert(key=task_parameters, data=meta_update_loss)
 
         # compute gradients wrt outer model (meta network)
         meta_update_grad = torch.autograd.grad(meta_update_loss, self.model_outer.weights + self.model_outer.biases)
@@ -249,7 +286,7 @@ class MAML(ABC):
 
             validation_model_iterations.append(([w for w in validation_network.weights], [b for b in validation_network.biases]))
 
-            # inner loop update 
+            # inner loop update
             for _ in range(self.validation_num_inner_updates):
 
                 # prediction of validation batch
