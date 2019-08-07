@@ -36,18 +36,6 @@ class ModelNetwork(nn.Module):
 
         self._construct_layers()
 
-        # if using priority queue for inner loop sampling, initialise 
-        if self.params.get("priority_sample"):
-            self.priority_queue = PriorityQueue(
-                sample_type=self.params.get(["priority_queue", "sample_type"]),
-                block_sizes=self.params.get(["priority_queue", "block_sizes"]),
-                burn_in=self.params.get(["priority_queue", "burn_in"])
-                )
-
-            if self.params.get(["priority_queue", "burn_in"]) is not None:
-                raise NotImplementedError("Burn in functionality not yet implemented")
-                self._fill_pq_buffer()
-
     @abstractmethod
     def _construct_layers(self) -> None:
         """
@@ -90,9 +78,30 @@ class MAML(ABC):
         self.validation_num_inner_updates = self.params.get("validation_num_inner_updates")
         self.training_iterations = self.params.get("training_iterations")
         self.validation_frequency = self.params.get("validation_frequency")
+        self.visualisation_frequency = self.params.get("visualisation_frequency")
         self.checkpoint_path = self.params.get("checkpoint_path")
         self.validation_task_batch_size = self.params.get("validation_task_batch_size")
         self.fixed_validation = self.params.get("fixed_validation")
+        self.priority_sample = self.params.get("priority_sample")
+
+        # if using priority queue for inner loop sampling, initialise 
+        if self.params.get("priority_sample"):
+            self.priority_queue = PriorityQueue(
+                sample_type=self.params.get(["priority_queue", "sample_type"]),
+                block_sizes=self.params.get(["priority_queue", "block_sizes"]),
+                param_ranges=self.params.get(["priority_queue", "param_ranges"]),
+                initial_value=self.params.get(["priority_queue", "initial_value"]),
+                epsilon_start=self.params.get(["priority_queue", "epsilon_start"]),
+                epsilon_final=self.params.get(["priority_queue", "epsilon_final"]),
+                epsilon_decay_rate=self.params.get(["priority_queue", "epsilon_decay_rate"]),
+                burn_in=self.params.get(["priority_queue", "burn_in"])
+                )
+
+            if self.params.get(["priority_queue", "burn_in"]) is not None:
+                raise NotImplementedError("Burn in functionality not yet implemented")
+                self._fill_pq_buffer()
+
+            # TODO: NEED TO CHECKPOINT PRIORITY QUEUE
 
         # load previously trained model to continue with
         if self.params.get("resume"):
@@ -126,7 +135,7 @@ class MAML(ABC):
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
-    def _get_task_from_params(self, parameters: Dict[str, Any]) -> Any:
+    def _get_task_from_params(self) -> Any:
         """
         Get specific task from specific given parameters 
         E.g. one specific sine function from family of sines
@@ -206,8 +215,8 @@ class MAML(ABC):
 
         # sample a task from task distribution and generate x, y tensors for that task
         if self.priority_sample:
-            task_parameters = self.priority_queue.query()
-            task = self._get_task_from_params()
+            max_indices, task_parameters = self.priority_queue.query()
+            task = self._get_task_from_params(task_parameters)
         else:
             task = self._sample_task()
         x_batch, y_batch = self._generate_batch(task=task, batch_size=self.inner_update_batch_size)
@@ -239,7 +248,10 @@ class MAML(ABC):
         meta_update_loss = self._compute_loss(meta_update_prediction, meta_update_samples_y)
 
         if self.priority_sample:
-            self.priority_queue.insert(key=task_parameters, data=meta_update_loss)
+            # print("----------- max_indices", max_indices)
+            # print("----------- task_parameters", task_parameters)
+            # print("----------- meta_update_loss", meta_update_loss)
+            self.priority_queue.insert(key=max_indices, data=meta_update_loss)
 
         # compute gradients wrt outer model (meta network)
         meta_update_grad = torch.autograd.grad(meta_update_loss, self.model_outer.weights + self.model_outer.biases)
@@ -254,12 +266,16 @@ class MAML(ABC):
             if step_count % self.validation_frequency == 0 and step_count != 0:
                 if self.checkpoint_path:
                     self.checkpoint_model(step_count=step_count)
-                self.validate(step_count=step_count)
+                if step_count % self.visualisation_frequency == 0:
+                    vis = True
+                else:
+                    vis = False
+                self.validate(step_count=step_count, visualise=vis)
             # t0 = time.time()
             self.outer_training_loop()
             # print(time.time() - t0)
 
-    def validate(self, step_count: int, visualise: bool=True) -> None:
+    def validate(self, step_count: int, visualise: bool=True, visualise_priority_queue: bool=True) -> None:
         """
         Performs a validation step for loss during training
 
@@ -323,10 +339,14 @@ class MAML(ABC):
                     )
                 validation_figures.append(validation_fig)
 
-        print('--- validation loss @ step {}: {}'.format(step_count, overall_validation_loss / self.validation_task_batch_size))
-        self.writer.add_scalar('experiment/meta_validation_loss', overall_validation_loss / self.validation_task_batch_size, step_count)
-        for f, fig in enumerate(validation_figures):
-            self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
+        print('--- validation loss @ step {}: {}'.format(step_count, overall_validation_loss / len(validation_tasks)))
+        self.writer.add_scalar('experiment/meta_validation_loss', overall_validation_loss / len(validation_tasks), step_count)
+        if visualise:
+            for f, fig in enumerate(validation_figures):
+                self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
+        if visualise_priority_queue:
+            priority_queue_fig = self.priority_queue.visualise_priority_queue()
+            self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
 
     def _get_validation_tasks(self):
         """produces set of tasks for use in validation"""
