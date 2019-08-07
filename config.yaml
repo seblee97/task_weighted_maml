@@ -1,5 +1,6 @@
 experiment_name:              
 resume:
+seed:                         0
 
 task_type:                    sin                       # which task to meta-learn e.g. sin- for sinusoid regression
 training_iterations:          250000                    # number of training iterations (total calls to the outer training loop)
