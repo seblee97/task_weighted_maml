@@ -67,7 +67,10 @@ class MAML(ABC):
     def __init__(self, params):
         self.params = params
 
-        self.writer = SummaryWriter() 
+        # initialise tensorboard writer
+        self.writer = SummaryWriter(
+            'runs/{}/{}'.format(self.params.get("experiment_name"), self.params.get("experiment_timestamp"))
+            ) 
 
         # extract relevant parameters
         self.task_batch_size = self.params.get("task_batch_size")
@@ -169,7 +172,7 @@ class MAML(ABC):
         """
         raise NotImplementedError("Base class abstract method")
 
-    def outer_training_loop(self) -> None:
+    def outer_training_loop(self, step_count: int) -> None:
         """
         Outer loop of MAML algorithm, consists of multiple inner loops and a meta update step
         """
@@ -182,7 +185,7 @@ class MAML(ABC):
         meta_update_gradient = [0 for _ in range(len(weight_copies) + len(bias_copies))]
 
         for _ in range(self.task_batch_size):
-            task_meta_gradient = self.inner_training_loop(weight_copies, bias_copies)  
+            task_meta_gradient = self.inner_training_loop(step_count, weight_copies, bias_copies)  
             for i in range(len(weight_copies) + len(bias_copies)):
                 meta_update_gradient[i] += task_meta_gradient[i].detach()
 
@@ -199,7 +202,7 @@ class MAML(ABC):
 
         self.meta_optimiser.step()
 
-    def inner_training_loop(self, weight_copies: List[torch.Tensor], bias_copies: List[torch.Tensor]) -> torch.Tensor:
+    def inner_training_loop(self, step_count: int, weight_copies: List[torch.Tensor], bias_copies: List[torch.Tensor]) -> torch.Tensor:
         """
         Inner loop of MAML algorithm, consists of optimisation steps on sampled tasks
 
@@ -215,8 +218,9 @@ class MAML(ABC):
 
         # sample a task from task distribution and generate x, y tensors for that task
         if self.priority_sample:
-            max_indices, task_parameters = self.priority_queue.query()
+            max_indices, task_parameters, epsilon = self.priority_queue.query()
             task = self._get_task_from_params(task_parameters)
+            self.writer.add_scalar('experiment/epsilon', epsilon, step_count)
         else:
             task = self._sample_task()
         x_batch, y_batch = self._generate_batch(task=task, batch_size=self.inner_update_batch_size)
@@ -272,7 +276,7 @@ class MAML(ABC):
                     vis = False
                 self.validate(step_count=step_count, visualise=vis)
             # t0 = time.time()
-            self.outer_training_loop()
+            self.outer_training_loop(step_count)
             # print(time.time() - t0)
 
     def validate(self, step_count: int, visualise: bool=True, visualise_priority_queue: bool=True) -> None:
