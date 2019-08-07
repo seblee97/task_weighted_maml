@@ -1,3 +1,6 @@
+experiment_name:              
+resume:
+
 task_type:                    sin                       # which task to meta-learn e.g. sin- for sinusoid regression
 training_iterations:          250000                    # number of training iterations (total calls to the outer training loop)
 task_batch_size:              25                        # number of tasks sampled per meta-update (per outer loop)
@@ -16,8 +19,6 @@ output_dimension:             1                         # dimension of network o
 fixed_validation:             True                      # whether to sample randomly during validation or use fixed structured validation tasks
 priority_sample:              True                      # whether to use a priority queue in sampling the inner loop task
 use_gpu:                      False                     # whether to use a gpu if it is available on the device
-
-resume:
   
 # task-specific configurations
 sin: 
@@ -32,7 +33,7 @@ priority_queue:
   sample_type:                'epsilon_greedy'          # type of sampling from priority_queue (max, e_greedy, or interpolate)
   epsilon_start:              0.9                       # probability of taking (starting value)
   epsilon_final:              0.1                       # probability of taking (starting value)
-  epsilon_decay_rate:         0.001                     # rate at which to anneal epsilon parameter
+  epsilon_decay_rate:         0.00001                   # rate at which to anneal epsilon parameter
   block_sizes:                [0.1, 5]                  # size of block in each dimension of parameter space in which to discretize priority queue
   param_ranges:               [[0.1, 5], [0, 180]]      # range of parameters over whih priority queue is sampled
   burn_in:                                              # if using argmax without epsilon greedy, need a burn-in to 'fill' priority queue buffer
