@@ -24,8 +24,10 @@ if __name__ == "__main__":
 
     maml_parameters = MAMLParameters(params) # create object in which to store experiment parameters
 
-    checkpoint_path = 'results/{}/'.format(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S'))
+    exp_timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S')
+    checkpoint_path = 'results/{}/'.format(exp_timestamp)
     maml_parameters.set_property("checkpoint_path", checkpoint_path)
+    maml_parameters.set_property("experiment_timestamp", exp_timestamp)
     
     if torch.cuda.is_available() and maml_parameters.get('use_gpu'):
         print("Using the GPU")
