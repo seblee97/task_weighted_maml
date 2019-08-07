@@ -27,7 +27,7 @@ if __name__ == "__main__":
     checkpoint_path = 'results/{}/'.format(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S'))
     maml_parameters.set_property("checkpoint_path", checkpoint_path)
     
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and maml_parameters.get('use_gpu'):
         print("Using the GPU")
         maml_parameters.set_property("device", "cuda")
         experiment_device = torch.device("gpu")
