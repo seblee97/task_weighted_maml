@@ -11,7 +11,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 class SineMAML(MAML):
 
@@ -22,11 +22,14 @@ class SineMAML(MAML):
         self.amplitude_bounds = params.get(['sin', 'amplitude_bounds'])
         self.domain_bounds = params.get(['sin', 'domain_bounds'])
         degree_phase_bounds = params.get(['sin', 'phase_bounds']) # phase given in degrees
+        block_sizes = params.get(['sin', 'fixed_val_blocks']) 
 
-        # convert phase bounds from degrees to radians
+        # convert phase bounds/ fixed_val_interval from degrees to radians
         self.phase_bounds = [
             degree_phase_bounds[0] * (2 * np.pi) / 360, degree_phase_bounds[1] * (2 * np.pi) / 360
             ]
+        
+        self.block_sizes = [block_sizes[0], block_sizes[1] * (2 * np.pi) / 360]
 
         self.model_inner = SinusoidalNetwork(params).to(self.device)
 
@@ -43,7 +46,7 @@ class SineMAML(MAML):
             return amplitude * np.sin(phase * x)
         return modified_sin
 
-    def _get_task_from_params(self, parameters: Dict[str, Any]) -> Any:
+    def _get_task_from_params(self, parameters: List[float]) -> Any:
         """
         Return sine function defined by parameters given
 
@@ -55,7 +58,7 @@ class SineMAML(MAML):
         defined by parameters given)
         """
         def modified_sin(x):
-            return parameters["amplitude"] * np.sin(parameters["phase"] * x)
+            return parameters[0] * np.sin(parameters[1] * x)
         return modified_sin
 
     def visualise(self, model_iterations, task, validation_x, validation_y, save_name):
@@ -120,26 +123,22 @@ class SineMAML(MAML):
         In the case of sinusoidal regression we split the parameter space equally.
         """
         # mesh of equally partitioned state space
-        split_per_parameter_dim = round(np.sqrt(self.validation_task_batch_size))
-        amplitude_range = self.amplitude_bounds[1] - self.amplitude_bounds[0]
-        phase_range = self.phase_bounds[1] - self.phase_bounds[0]
-
         amplitude_spectrum, phase_spectrum = np.mgrid[
-            self.amplitude_bounds[0]:self.amplitude_bounds[1]:complex(0, amplitude_range / split_per_parameter_dim),
-            self.phase_bounds[0]:self.phase_bounds[1]:complex(0, phase_range / split_per_parameter_dim)
+            self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.block_sizes[0],
+            self.phase_bounds[0]:self.phase_bounds[1]:self.block_sizes[1]
             ]
-
-        print("---a spectrum", amplitude_spectrum)
-        print("---p spectrum", phase_spectrum)
 
         parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
 
         fixed_validation_tasks = []
 
-        for param_pair in parameter_space_tuples:
+        def generate_sin(amplitude, phase):
             def modified_sin(x):
-                return param_pair[0] * np.sin(param_pair[1] * x)
-            fixed_validation_tasks.append(modified_sin)
+                return amplitude * np.sin(phase * x)
+            return modified_sin
+
+        for param_pair in parameter_space_tuples:
+            fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
 
         return fixed_validation_tasks
 
