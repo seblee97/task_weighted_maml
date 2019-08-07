@@ -28,6 +28,10 @@ if __name__ == "__main__":
     checkpoint_path = 'results/{}/'.format(exp_timestamp)
     maml_parameters.set_property("checkpoint_path", checkpoint_path)
     maml_parameters.set_property("experiment_timestamp", exp_timestamp)
+
+    seed_value = maml_parameters.get("seed")
+    
+    # TODO: set seeds correctly, does it need to be done separately for each script?
     
     if torch.cuda.is_available() and maml_parameters.get('use_gpu'):
         print("Using the GPU")
