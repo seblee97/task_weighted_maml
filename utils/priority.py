@@ -101,7 +101,7 @@ class PriorityQueue(object):
         if self.epsilon > self.epsilon_final:
             self.epsilon -= self.epsilon_decay_rate
 
-        return max_indices, parameter_values
+        return max_indices, parameter_values, self.epsilon
 
     def visualise_priority_queue(self):
         """
