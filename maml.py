@@ -269,7 +269,8 @@ class MAML(ABC):
             if step_count % self.validation_frequency == 0 and step_count != 0:
                 if self.checkpoint_path:
                     self.checkpoint_model(step_count=step_count)
-                    self.priority_queue.save_queue(step_count=step_count)
+                    if self.priority_sample:
+                        self.priority_queue.save_queue(step_count=step_count)
                 if step_count % self.visualisation_frequency == 0:
                     vis = True
                 else:
@@ -348,9 +349,9 @@ class MAML(ABC):
         if visualise:
             for f, fig in enumerate(validation_figures):
                 self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
-            if self.priority_queue:
-                priority_queue_fig = self.priority_queue.visualise_priority_queue()
-                self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
+        if self.priority_sample:
+            priority_queue_fig = self.priority_queue.visualise_priority_queue()
+            self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
 
     def _get_validation_tasks(self):
         """produces set of tasks for use in validation"""
