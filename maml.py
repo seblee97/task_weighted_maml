@@ -67,11 +67,6 @@ class MAML(ABC):
     def __init__(self, params):
         self.params = params
 
-        # initialise tensorboard writer
-        self.writer = SummaryWriter(
-            'runs/{}/{}'.format(self.params.get("experiment_name"), self.params.get("experiment_timestamp"))
-            ) 
-
         # extract relevant parameters
         self.task_batch_size = self.params.get("task_batch_size")
         self.inner_update_lr = self.params.get("inner_update_lr")
@@ -87,9 +82,14 @@ class MAML(ABC):
         self.fixed_validation = self.params.get("fixed_validation")
         self.priority_sample = self.params.get("priority_sample")
 
+        # initialise tensorboard writer
+        self.writer = SummaryWriter(self.checkpoint_path)
+        # 'results/{}/{}'.format(self.params.get("experiment_name"), self.params.get("experiment_timestamp"))
+
         # if using priority queue for inner loop sampling, initialise 
         if self.params.get("priority_sample"):
             self.priority_queue = PriorityQueue(
+                resume=self.params.get(["resume", "priority_queue"]),
                 sample_type=self.params.get(["priority_queue", "sample_type"]),
                 block_sizes=self.params.get(["priority_queue", "block_sizes"]),
                 param_ranges=self.params.get(["priority_queue", "param_ranges"]),
@@ -97,18 +97,17 @@ class MAML(ABC):
                 epsilon_start=self.params.get(["priority_queue", "epsilon_start"]),
                 epsilon_final=self.params.get(["priority_queue", "epsilon_final"]),
                 epsilon_decay_rate=self.params.get(["priority_queue", "epsilon_decay_rate"]),
-                burn_in=self.params.get(["priority_queue", "burn_in"])
+                burn_in=self.params.get(["priority_queue", "burn_in"]),
+                save_path=self.checkpoint_path
                 )
 
             if self.params.get(["priority_queue", "burn_in"]) is not None:
                 raise NotImplementedError("Burn in functionality not yet implemented")
                 self._fill_pq_buffer()
 
-            # TODO: NEED TO CHECKPOINT PRIORITY QUEUE
-
         # load previously trained model to continue with
-        if self.params.get("resume"):
-            model_checkpoint = self.params.get("resume")
+        if self.params.get(["resume", "model"]):
+            model_checkpoint = self.params.get(["resume", "model"])
             try:
                 print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint))
                 self.model_inner.load_state_dict(torch.load(model_checkpoint))
@@ -270,6 +269,7 @@ class MAML(ABC):
             if step_count % self.validation_frequency == 0 and step_count != 0:
                 if self.checkpoint_path:
                     self.checkpoint_model(step_count=step_count)
+                    self.priority_queue.save_queue(step_count=step_count)
                 if step_count % self.visualisation_frequency == 0:
                     vis = True
                 else:
@@ -279,7 +279,7 @@ class MAML(ABC):
             self.outer_training_loop(step_count)
             # print(time.time() - t0)
 
-    def validate(self, step_count: int, visualise: bool=True, visualise_priority_queue: bool=True) -> None:
+    def validate(self, step_count: int, visualise: bool=True) -> None:
         """
         Performs a validation step for loss during training
 
@@ -348,9 +348,9 @@ class MAML(ABC):
         if visualise:
             for f, fig in enumerate(validation_figures):
                 self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
-        if visualise_priority_queue:
-            priority_queue_fig = self.priority_queue.visualise_priority_queue()
-            self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
+            if self.priority_queue:
+                priority_queue_fig = self.priority_queue.visualise_priority_queue()
+                self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
 
     def _get_validation_tasks(self):
         """produces set of tasks for use in validation"""
