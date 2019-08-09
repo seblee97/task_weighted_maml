@@ -12,7 +12,8 @@ tmux send-keys -t "pq_maml_exp" "python main.py pq_maml_config.yaml" C-m
 
 # start tmux session for tensorboard, launch tensorboard
 tmux new -s tensorboard -d
-tmux send-keys -t "tensorboard" "tensorboard --logdir /Users/sebastianlee/Dropbox/Documents/Work/Hack/MAML_project/maml_seb/runs/None/" C-m
+tmux send-keys -t "tensorboard" "source /Users/sebastianlee/Dropbox/Documents/Work/Hack/Environments/meta/bin/activate" C-m
+tmux send-keys -t "tensorboard" "tensorboard --logdir results/" C-m
 
 
 
