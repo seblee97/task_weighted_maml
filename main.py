@@ -25,7 +25,11 @@ if __name__ == "__main__":
     maml_parameters = MAMLParameters(params) # create object in which to store experiment parameters
 
     exp_timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S')
-    checkpoint_path = 'results/{}/'.format(exp_timestamp)
+    experiment_name = maml_parameters.get("experiment_name")
+    if experiment_name:
+        checkpoint_path = 'results/{}/{}/'.format(exp_timestamp, experiment_name)
+    else:
+        checkpoint_path = 'results/{}/'.format(exp_timestamp)
     maml_parameters.set_property("checkpoint_path", checkpoint_path)
     maml_parameters.set_property("experiment_timestamp", exp_timestamp)
 
