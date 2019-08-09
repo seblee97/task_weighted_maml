@@ -1,7 +1,3 @@
-# EXPERIMENT RUN INSTRUCTIONS
-
-# OPEN TMUX Sessions for experiment and tensorboard
-
 # start tmux sessions one for each experiment
 tmux new -s standard_maml_exp -d
 tmux new -s pq_maml_exp -d
