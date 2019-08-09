@@ -2,6 +2,8 @@ import operator
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import datetime
+import time
 
 from typing import List, Dict, Tuple
 
@@ -10,8 +12,9 @@ class PriorityQueue(object):
     def __init__(self, 
                 block_sizes: Dict[str, float], param_ranges: Dict[str, Tuple[float, float]], 
                 sample_type: str, epsilon_start: float, epsilon_final: float, epsilon_decay_rate: float,
-                initial_value: float=None, burn_in: int=None
-                ): 
+                resume: str, save_path: str, burn_in: int=None, initial_value: float=None
+                ):
+        self.resume = resume
         self.block_sizes = block_sizes
         self.param_ranges = param_ranges
         self.sample_type = sample_type
@@ -20,6 +23,7 @@ class PriorityQueue(object):
         self.epsilon_final = epsilon_final
         self.epsilon_decay_rate = epsilon_decay_rate 
         self.burn_in = burn_in
+        self.save_path = save_path
 
         self.queue = self._initialise_queue()
 
@@ -31,15 +35,31 @@ class PriorityQueue(object):
         :return parameter_grid: a numpy array of dimension equal to number of parameters specifying task. 
                                 initialised to a vlue specified in init
         """
-        pranges = []
-        for i in range(len(self.param_ranges)):
-            pranges.append(int((self.param_ranges[i][1] - self.param_ranges[i][0]) / self.block_sizes[i]))
-
-        if self.initial_value:
-            parameter_grid = self.initial_value * np.zeros(tuple(pranges))
+        if self.resume:
+            # load saved priority queue from previous run
+            parameter_grid = np.load(self.resume)
+        
         else:
-            parameter_grid = np.abs(np.random.normal(0, 1, tuple(pranges)))
+            pranges = []
+            for i in range(len(self.param_ranges)):
+                pranges.append(int((self.param_ranges[i][1] - self.param_ranges[i][0]) / self.block_sizes[i]))
+
+            if self.initial_value:
+                parameter_grid = self.initial_value * np.zeros(tuple(pranges))
+            else:
+                parameter_grid = np.abs(np.random.normal(0, 1, tuple(pranges)))
         return parameter_grid
+
+    def save_queue(self, step_count):
+        """
+        Save a copy of the priority_queue up to this point in training
+
+        :param step_count: iteration number of training (meta-steps)
+        """
+        timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H-%M-%S')
+        # format of model chekcpoint path: timestamp _ step_count
+        PATH = '{}priority_queue_{}_{}.npz'.format(self.save_path, timestamp, str(step_count))
+        np.savez(PATH, self.queue)
   
     # for checking if the queue is empty 
     def isEmpty(self):
