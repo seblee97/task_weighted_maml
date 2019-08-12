@@ -1,3 +1,4 @@
 - model checkpointing doesn't seem to work
 - plotting of priority queue scaling to parameteras
 - add interpolate etc. methods for priority queue query 
+- think about whether current loss metric accurately captures varying success of meta params for tasks in distribution
