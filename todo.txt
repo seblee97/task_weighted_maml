@@ -1,0 +1,2 @@
+- model checkpointing doesn't seem to work
+- plotting of priority queue scaling to parameteras
