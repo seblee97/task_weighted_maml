@@ -7,25 +7,29 @@ import time
 
 from typing import List, Dict, Tuple
 
-class PriorityQueue(object):
+from abc import ABC, abstractmethod
+
+class PriorityQueue(ABC):
 
     def __init__(self, 
                 block_sizes: Dict[str, float], param_ranges: Dict[str, Tuple[float, float]], 
-                sample_type: str, epsilon_start: float, epsilon_final: float, epsilon_decay_rate: float,
-                resume: str, save_path: str, burn_in: int=None, initial_value: float=None
+                sample_type: str, epsilon_start: float, epsilon_final: float, epsilon_decay_rate: float, epsilon_decay_start: int,
+                queue_resume: str, counts_resume: str, save_path: str, burn_in: int=None, initial_value: float=None
                 ):
-        self.resume = resume
+        self.queue_resume = queue_resume
+        self.counts_resume = counts_resume
         self.block_sizes = block_sizes
         self.param_ranges = param_ranges
         self.sample_type = sample_type
         self.initial_value = initial_value
         self.epsilon = epsilon_start
         self.epsilon_final = epsilon_final
+        self.epsilon_decay_start = epsilon_decay_start
         self.epsilon_decay_rate = epsilon_decay_rate 
         self.burn_in = burn_in
         self.save_path = save_path
 
-        self.queue = self._initialise_queue()
+        self.queue, self.sample_counts = self._initialise_queue() 
 
     def _initialise_queue(self):
         """
@@ -35,9 +39,10 @@ class PriorityQueue(object):
         :return parameter_grid: a numpy array of dimension equal to number of parameters specifying task. 
                                 initialised to a vlue specified in init
         """
-        if self.resume:
+        if self.queue_resume:
             # load saved priority queue from previous run
-            parameter_grid = np.load(self.resume)
+            parameter_grid = np.load(self.queue_resume)
+            counts = np.load(self.counts_resume)
         
         else:
             pranges = []
@@ -48,18 +53,22 @@ class PriorityQueue(object):
                 parameter_grid = self.initial_value * np.zeros(tuple(pranges))
             else:
                 parameter_grid = np.abs(np.random.normal(0, 1, tuple(pranges)))
-        return parameter_grid
+
+            counts = np.zeros(tuple(pranges))
+        return parameter_grid, counts
 
     def save_queue(self, step_count):
         """
-        Save a copy of the priority_queue up to this point in training
+        Save a copy of the priority_queue and queue_counts up to this point in training
 
         :param step_count: iteration number of training (meta-steps)
         """
         timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H-%M-%S')
         # format of model chekcpoint path: timestamp _ step_count
-        PATH = '{}priority_queue_{}_{}.npz'.format(self.save_path, timestamp, str(step_count))
-        np.savez(PATH, self.queue)
+        queue_path = '{}priority_queue_{}_{}.npz'.format(self.save_path, timestamp, str(step_count))
+        counts_path = '{}queue_counts_{}_{}.npz'.format(self.save_path, timestamp, str(step_count))
+        np.savez(queue_path, self.queue)
+        np.savez(counts_path, self.sample_counts)
   
     # for checking if the queue is empty 
     def isEmpty(self):
@@ -67,21 +76,25 @@ class PriorityQueue(object):
   
     # for inserting an element in the queue
     def insert(self, key, data):
-        # in case of queue being a dictionary, 'key' is a key into dict object
-        if type(self.queue) == dict:
-            self.queue[key] = data.cpu().detach().numpy()
-        # in case of queue being a np array, 'key' is a list specifying indices
-        elif type(self.queue) == np.ndarray:
-            self.queue[tuple(key)] = data.cpu().detach().numpy()
+        try:
+            # in case of queue being a dictionary, 'key' is a key into dict object
+            if type(self.queue) == dict:
+                self.queue[key] = data.cpu().detach().numpy()
+            # in case of queue being a np array, 'key' is a list specifying indices
+            elif type(self.queue) == np.ndarray:    
+                self.queue[tuple(key)] = data.cpu().detach().numpy()
+        except:
+            import pdb; pdb.set_trace()
   
     # for popping an element based on priority heuristic
-    def query(self):
+    def query(self, step):
         """
         queries priority queue and returns value based on priority heuristic. 
         if max, highest value is returned
         if epsilon_greedy, highest value is return with probability 1-epsilon, else random value is returned
         if sample_interpolation, a sample is made according to a pdf defined by a continuous interpolation of the param space
 
+        :param step: step count of training
         :return value: value from priority queue
         """
         def get_max_indices():
@@ -103,43 +116,51 @@ class PriorityQueue(object):
                     raise NotImplementedError("Currently not supported - need a way to fill buffer before this would make sense to use")
                 elif self.sample_type == 'epsilon_greedy':
                     if random.random() < self.epsilon: # select randomly
-                        random_indices = [np.random.randint(d) for d in self.queue.shape] 
+                        random_indices = [np.random.randint(d) for d in self.queue.shape]
                         return random_indices
                     else: # select greedily
-                        max_indices = np.where(self.queue == np.amax(self.queue))
-                        return list(np.concatenate([list(i) for i in max_indices]))
+                        max_indices = np.array(np.where(self.queue == np.amax(self.queue))).T
+                        if len(max_indices) > 1:
+                            return random.choice(max_indices).tolist()
+                        else:
+                            return max_indices[0].tolist()
                 elif self.sample_type == 'sample_interpolation':
                     raise NotImplementedError("Currently not supported")
                 else:
                     raise ValueError("No sample_type named {}. Please try either 'max', 'epsilon_greedy' or 'sample_interpolation'".format(self.sample_type))
+    
+        indices = get_max_indices()
 
-        max_indices = get_max_indices()
+        # add to sample count of max_indices
+        try:
+            self.sample_counts[tuple(indices)] += 1
+        except:
+            import pdb; pdb.set_trace()
         
-        parameter_values = [i + b * random.random() for (i, b) in zip(max_indices, self.block_sizes)]
+        # convert samples/max indices to parameter values (i.e. scale by parameter ranges)
+        parameter_values = [p[0] + i * b + random.uniform(0, b) for (p, i, b) in zip(self.param_ranges, indices, self.block_sizes)]
 
         # anneal epsilon
-        if self.epsilon > self.epsilon_final:
+        if self.epsilon > self.epsilon_final and step > self.epsilon_decay_start:
             self.epsilon -= self.epsilon_decay_rate
 
-        return max_indices, parameter_values, self.epsilon
+        return indices, parameter_values, self.epsilon
 
+    @abstractmethod
     def visualise_priority_queue(self):
         """
         Produces plot of priority queue. 
 
         Discrete vs continuous, 2d heatmap vs 3d.
         """
-        if type(self.queue) == np.ndarray:
-            if len(self.queue.shape) == 2:
-                fig = plt.figure()
-                plt.imshow(self.queue)
-                plt.colorbar()
-                return fig
-            else:
-                raise ValueError("Visualisation with parameter space dimension > 2 not supported")
-        else:
-            raise NotImplementedError("Visualisation for dictionary queue not implemented")
-
+        raise NotImplementedError("Base class method")
+    
+    @abstractmethod
+    def visualise_sample_counts(self):
+        """
+        Produces plot of priority queue sampling counts 
+        """
+        raise NotImplementedError("Base class method")
 
     def interpolate_discrete_queue(self):
         """
