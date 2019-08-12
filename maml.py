@@ -88,18 +88,7 @@ class MAML(ABC):
 
         # if using priority queue for inner loop sampling, initialise 
         if self.params.get("priority_sample"):
-            self.priority_queue = PriorityQueue(
-                resume=self.params.get(["resume", "priority_queue"]),
-                sample_type=self.params.get(["priority_queue", "sample_type"]),
-                block_sizes=self.params.get(["priority_queue", "block_sizes"]),
-                param_ranges=self.params.get(["priority_queue", "param_ranges"]),
-                initial_value=self.params.get(["priority_queue", "initial_value"]),
-                epsilon_start=self.params.get(["priority_queue", "epsilon_start"]),
-                epsilon_final=self.params.get(["priority_queue", "epsilon_final"]),
-                epsilon_decay_rate=self.params.get(["priority_queue", "epsilon_decay_rate"]),
-                burn_in=self.params.get(["priority_queue", "burn_in"]),
-                save_path=self.checkpoint_path
-                )
+            self.priority_queue = self._get_priority_queue()
 
             if self.params.get(["priority_queue", "burn_in"]) is not None:
                 raise NotImplementedError("Burn in functionality not yet implemented")
@@ -111,7 +100,7 @@ class MAML(ABC):
             try:
                 print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint))
                 self.model_inner.load_state_dict(torch.load(model_checkpoint))
-                self.start_iteration = float(model_checkpoint.split('_')[-1])
+                self.start_iteration = int(model_checkpoint.split('_')[-1].split('.')[0])
             except:
                 raise FileNotFoundError("Resume checkpoint specified in config does not exist.")
         else:
@@ -125,6 +114,11 @@ class MAML(ABC):
 
         # write copy of config_yaml in model_checkpoint_folder
         self.params.save_configuration(self.checkpoint_path)
+
+    @abstractmethod
+    def _get_priority_queue(self):
+        """Initiate priority queue"""
+        raise NotImplementedError("Base class method")
 
     @abstractmethod
     def _sample_task(self) -> Any:
@@ -217,7 +211,7 @@ class MAML(ABC):
 
         # sample a task from task distribution and generate x, y tensors for that task
         if self.priority_sample:
-            max_indices, task_parameters, epsilon = self.priority_queue.query()
+            max_indices, task_parameters, epsilon = self.priority_queue.query(step=step_count)
             task = self._get_task_from_params(task_parameters)
             self.writer.add_scalar('experiment/epsilon', epsilon, step_count)
         else:
@@ -351,7 +345,9 @@ class MAML(ABC):
                 self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
         if self.priority_sample:
             priority_queue_fig = self.priority_queue.visualise_priority_queue()
+            priority_queue_count_fig = self.priority_queue.visualise_sample_counts()
             self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
+            self.writer.add_figure("queue_counts", priority_queue_count_fig, step_count)
 
     def _get_validation_tasks(self):
         """produces set of tasks for use in validation"""
