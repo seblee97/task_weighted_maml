@@ -1,4 +1,5 @@
 from maml import MAML, ModelNetwork
+from utils.priority import PriorityQueue
 
 import torch
 from torch import optim
@@ -11,7 +12,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 class SineMAML(MAML):
 
@@ -34,6 +35,22 @@ class SineMAML(MAML):
         self.model_inner = SinusoidalNetwork(params).to(self.device)
 
         MAML.__init__(self, params)
+
+    def _get_priority_queue(self):
+        return  SinePriorityQueue(
+                    queue_resume=self.params.get(["resume", "priority_queue"]),
+                    counts_resume=self.params.get(["resume", "queue_counts"]),
+                    sample_type=self.params.get(["priority_queue", "sample_type"]),
+                    block_sizes=self.params.get(["priority_queue", "block_sizes"]),
+                    param_ranges=self.params.get(["priority_queue", "param_ranges"]),
+                    initial_value=self.params.get(["priority_queue", "initial_value"]),
+                    epsilon_start=self.params.get(["priority_queue", "epsilon_start"]),
+                    epsilon_final=self.params.get(["priority_queue", "epsilon_final"]),
+                    epsilon_decay_start=self.params.get(["priority_queue", "epsilon_decay_start"]),
+                    epsilon_decay_rate=self.params.get(["priority_queue", "epsilon_decay_rate"]),
+                    burn_in=self.params.get(["priority_queue", "burn_in"]),
+                    save_path=self.checkpoint_path
+                    )
 
     def _sample_task(self, plot=False):
         """
@@ -194,3 +211,87 @@ class SinusoidalNetwork(ModelNetwork):
         y = F.linear(x, self.weights[-1].t(), self.biases[-1]) # no relu on output layer
 
         return y
+
+class SinePriorityQueue(PriorityQueue):
+
+    def __init__(self, 
+                block_sizes: Dict[str, float], param_ranges: Dict[str, Tuple[float, float]], 
+                sample_type: str, epsilon_start: float, epsilon_final: float, epsilon_decay_rate: float, epsilon_decay_start: int,
+                queue_resume: str, counts_resume: str, save_path: str, burn_in: int=None, initial_value: float=None
+                ):
+
+        # convert phase bounds/ phase block_size from degrees to radians
+        phase_ranges = [
+            param_ranges[1][0] * (2 * np.pi) / 360, param_ranges[1][1] * (2 * np.pi) / 360
+            ]
+        phase_block_size = block_sizes[1] * (2 * np.pi) / 360
+
+        param_ranges = [param_ranges[0], phase_ranges]
+        block_sizes = [block_sizes[0], phase_block_size]
+        
+        super().__init__(
+            block_sizes=block_sizes, param_ranges=param_ranges, sample_type=sample_type, epsilon_start=epsilon_start,
+            epsilon_final=epsilon_final, epsilon_decay_rate=epsilon_decay_rate, epsilon_decay_start=epsilon_decay_start, queue_resume=queue_resume,
+            counts_resume=counts_resume, save_path=save_path, burn_in=burn_in, initial_value=initial_value
+        )
+
+        self.figure_locsx, self.figure_locsy, self.figure_labelsx, self.figure_labelsy = self._get_figure_labels()
+
+    def _get_figure_labels(self):
+        xlocs = np.arange(0, self.queue.shape[1])
+        ylocs = np.arange(0, self.queue.shape[0])
+        xlabels = np.arange(self.param_ranges[1][0], self.param_ranges[1][1], self.block_sizes[1])
+        ylabels = np.arange(self.param_ranges[0][0], self.param_ranges[0][1], self.block_sizes[0])
+        return xlocs, ylocs, xlabels, ylabels
+
+    def visualise_priority_queue(self):
+        """
+        Produces plot of priority queue. 
+
+        Discrete vs continuous, 2d heatmap vs 3d.
+        """
+        if type(self.queue) == np.ndarray:
+            if len(self.queue.shape) == 2:
+                fig = plt.figure()
+                plt.imshow(self.queue)
+                plt.colorbar()
+                plt.xlabel("Phase")
+                plt.ylabel("Amplitude")
+
+                # set labels to sine specific parameter ranges
+                # plt.xticks(
+                #     locs=self.figure_locsx, 
+                #     labels=self.figure_labelsx
+                #     )
+                # plt.yticks(
+                #     locs=self.figure_locsy, 
+                #     labels=self.figure_labelsy
+                #     )
+
+                return fig
+            else:
+                raise ValueError("Visualisation with parameter space dimension > 2 not supported")
+        else:
+            raise NotImplementedError("Visualisation for dictionary queue not implemented")
+
+    def visualise_sample_counts(self):
+        """
+        Produces plot of priority queue sampling counts 
+        """
+        fig = plt.figure()
+        plt.imshow(self.sample_counts)
+        plt.colorbar()
+        plt.xlabel("Phase")
+        plt.ylabel("Amplitude")
+
+        # set labels to sine specific parameter ranges
+        # plt.xticks(
+        #     locs=self.figure_locsx, 
+        #     labels=self.figure_labelsx
+        #     )
+        # plt.yticks(
+        #     locs=self.figure_locsy, 
+        #     labels=self.figure_labelsy
+        #     )
+
+        return fig
