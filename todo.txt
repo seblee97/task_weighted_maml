@@ -1,2 +1,3 @@
 - model checkpointing doesn't seem to work
 - plotting of priority queue scaling to parameteras
+- add interpolate etc. methods for priority queue query 
