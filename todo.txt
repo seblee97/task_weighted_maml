@@ -3,3 +3,4 @@
 - add interpolate etc. methods for priority queue query 
 - think about whether current loss metric accurately captures varying success of meta params for tasks in distribution
 - make dev and exp branch
+- figure out how to structure repos (folder for experiment scripts, folder for model scripts etc.)
