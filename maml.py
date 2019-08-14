@@ -99,8 +99,9 @@ class MAML(ABC):
             model_checkpoint = self.params.get(["resume", "model"])
             try:
                 print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint))
-                self.model_inner.load_state_dict(torch.load(model_checkpoint))
-                self.start_iteration = int(model_checkpoint.split('_')[-1].split('.')[0])
+                checkpoint = torch.load(model_checkpoint)
+                self.model_inner.load_state_dict(checkpoint['model_state_dict'])
+                self.start_iteration = checkpoint['step'] # int(model_checkpoint.split('_')[-1].split('.')[0])
             except:
                 raise FileNotFoundError("Resume checkpoint specified in config does not exist.")
         else:
@@ -111,6 +112,9 @@ class MAML(ABC):
         self.meta_optimiser = optim.Adam(
             self.model_outer.weights + self.model_outer.biases, lr=self.meta_lr
             )
+
+        if self.params.get(["resume", "model"]):
+            self.meta_optimiser.load_state_dict(checkpoint['optimizer_state_dict'])
 
         # write copy of config_yaml in model_checkpoint_folder
         self.params.save_configuration(self.checkpoint_path)
@@ -374,7 +378,11 @@ class MAML(ABC):
         timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H-%M-%S')
         # format of model chekcpoint path: timestamp _ step_count
         PATH = '{}model_checkpoint_{}_{}.pt'.format(self.checkpoint_path, timestamp, str(step_count))
-        torch.save(self.model_outer.state_dict(), PATH)
+        torch.save({
+            'step': step_count,
+            'model_state_dict': self.model_outer.state_dict(),
+            'optimizer_state_dict': self.meta_optimiser.state_dict(),
+            }, PATH)
 
     @abstractmethod
     def visualise(self) -> None:
