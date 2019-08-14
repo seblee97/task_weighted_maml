@@ -11,7 +11,7 @@ Thoughts
 - Links to fairness
 - Does current loss metric accurately captures varying success of meta params for tasks in distribution
 
-Done 
+Done
 - model checkpointing doesn't seem to work (fixed maybe - test)
 - random seeds
 - plot/log variance of meta validation loss
