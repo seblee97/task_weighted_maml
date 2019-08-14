@@ -2,7 +2,8 @@ Todos
 - plotting of priority queue scaling to parameters
 - add interpolate etc. methods for priority queue query 
 - make dev and exp branch
-- Make repos a package
+- Make repos a package - with setup for dev
+- Change paths to be consistent with the new package structure
 
 Thoughts
 - if sampling more from higher loss regions of the parameter space leads to a generally less effective meta prior, 
