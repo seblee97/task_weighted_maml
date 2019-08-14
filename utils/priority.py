@@ -167,3 +167,15 @@ class PriorityQueue(ABC):
         Make a continuous interpolation of some k-dimensional, discrete parmater queue
         """
         raise NotImplementedError
+
+    def compute_count_loss_correlation(self):
+        """
+        computes the correlation between the number of times a range in the parameter space
+        has been queried and the loss associated with that range.
+
+        Correlation is defined with respect to the flattened matrices
+        """
+        flattened_losses = self.queue.flatten()
+        flattened_counts = self.sample_counts.flatten()
+        return np.correlate(flattened_losses, flattened_counts)[0]
+
