@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="maml-seblee97",
+    name="maml-pq",
     version="0.0.1",
     author="Sebastian Lee",
     author_email="sebalexlee@gmail.com",
