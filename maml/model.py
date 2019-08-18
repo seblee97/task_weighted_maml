@@ -215,11 +215,22 @@ class MAML(ABC):
 
         # sample a task from task distribution and generate x, y tensors for that task
         if self.priority_sample:
+            # query queue for next task parameters
             max_indices, task_parameters, epsilon = self.priority_queue.query(step=step_count)
-            queue_count_loss_correlation = self.priority_queue.compute_count_loss_correlation()
+
+            # get task from parameters returned from query
             task = self._get_task_from_params(task_parameters)
-            self.writer.add_scalar('queue/epsilon', epsilon, step_count)
-            self.writer.add_scalar('queue/queue_correlation', queue_count_loss_correlation, step_count)
+
+            # compute metrics for tb logging
+            queue_count_loss_correlation = self.priority_queue.compute_count_loss_correlation()
+            queue_sum = np.sum(self.priority_queue.get_queue())
+            queue_std = np.std(self.priority_queue.get_queue())
+
+            # write to tensorboard
+            self.writer.add_scalar('queue_metrics/epsilon', epsilon, step_count)
+            self.writer.add_scalar('queue_metrics/queue_correlation', queue_count_loss_correlation, step_count)
+            self.writer.add_scalar('queue_metrics/queue_sum', queue_sum, step_count)
+            self.writer.add_scalar('queue_metrics/queue_std', queue_std, step_count)
         else:
             task = self._sample_task()
         x_batch, y_batch = self._generate_batch(task=task, batch_size=self.inner_update_batch_size)
@@ -348,16 +359,18 @@ class MAML(ABC):
         var_validation_loss = np.std(validation_losses)
 
         print('--- validation loss @ step {}: {}'.format(step_count, mean_validation_loss))
-        self.writer.add_scalar('experiment/meta_validation_loss_mean', mean_validation_loss, step_count)
-        self.writer.add_scalar('experiment/meta_validation_loss_std', var_validation_loss, step_count)
+        self.writer.add_scalar('meta_metrics/meta_validation_loss_mean', mean_validation_loss, step_count)
+        self.writer.add_scalar('meta_metrics/meta_validation_loss_std', var_validation_loss, step_count)
         if visualise:
             for f, fig in enumerate(validation_figures):
                 self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
         if self.priority_sample:
             priority_queue_fig = self.priority_queue.visualise_priority_queue()
             priority_queue_count_fig = self.priority_queue.visualise_sample_counts()
+            priority_queue_loss_dist_fig = self.priority_queue.visualise_priority_queue_loss_distribution()
             self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
             self.writer.add_figure("queue_counts", priority_queue_count_fig, step_count)
+            self.writer.add_figure("queue_loss_dist", priority_queue_loss_dist_fig, step_count)
 
     def _get_validation_tasks(self):
         """produces set of tasks for use in validation"""
