@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import datetime
 import time
-from scipy import stats
+from scipy import stats, interpolate
 
 from typing import List, Dict, Tuple
 
@@ -37,6 +37,12 @@ class PriorityQueue(ABC):
         getter method for priority queue
         """
         return self.queue
+
+    def get_epsilon(self):
+        """
+        getter method for epsilon value
+        """
+        return self.epsilon
 
     def _initialise_queue(self):
         """
@@ -102,41 +108,59 @@ class PriorityQueue(ABC):
         if sample_interpolation, a sample is made according to a pdf defined by a continuous interpolation of the param space
 
         :param step: step count of training
-        :return value: value from priority queue
+
+        :return indices: indices of priority queue
+        :return parameter_values: values of parameters for task (obtained from indices)
         """
-        def get_max_indices():
-            if type(self.queue) == dict:
-                if self.sample_type == 'max':
-                    raise NotImplementedError("Currently not supported - need a way to fill buffer before this would make sense to use")
-                    return max(self.queue.items(), key=operator.itemgetter(1))[0]
-                elif self.sample_type == 'epsilon_greedy':
-                    if random.random() < self.epsilon: # select randomly
-                        return random.choice(list(self.queue.keys()))
-                    else: # select greedily
-                        return max(self.queue.items(), key=operator.itemgetter(1))[0]
-                elif self.sample_type == 'sample_interpolation':
-                    raise NotImplementedError("Currently not supported")
+        if type(self.queue) != np.ndarray:
+            raise ValueError("Incorrect type for priority queue, must be numpy array")
+
+        if self.sample_type == 'max':
+            raise NotImplementedError("Currently not supported - need a way to fill buffer before this would make sense to use")
+
+        elif self.sample_type == 'epsilon_greedy':
+            if random.random() < self.epsilon: # select randomly
+                indices = [np.random.randint(d) for d in self.queue.shape]
+            else: # select greedily
+                max_indices = np.array(np.where(self.queue == np.amax(self.queue))).T
+                if len(max_indices) > 1:
+                    indices = random.choice(max_indices).tolist()
                 else:
-                    raise ValueError("No sample_type named {}. Please try either 'max', 'epsilon_greedy' or 'sample_interpolation'".format(self.sample_type))
-            elif type(self.queue) == np.ndarray:
-                if self.sample_type == 'max':
-                    raise NotImplementedError("Currently not supported - need a way to fill buffer before this would make sense to use")
-                elif self.sample_type == 'epsilon_greedy':
-                    if random.random() < self.epsilon: # select randomly
-                        random_indices = [np.random.randint(d) for d in self.queue.shape]
-                        return random_indices
-                    else: # select greedily
-                        max_indices = np.array(np.where(self.queue == np.amax(self.queue))).T
-                        if len(max_indices) > 1:
-                            return random.choice(max_indices).tolist()
-                        else:
-                            return max_indices[0].tolist()
-                elif self.sample_type == 'sample_interpolation':
-                    raise NotImplementedError("Currently not supported")
-                else:
-                    raise ValueError("No sample_type named {}. Please try either 'max', 'epsilon_greedy' or 'sample_interpolation'".format(self.sample_type))
-    
-        indices = get_max_indices()
+                    indices = max_indices[0].tolist()
+
+        elif self.sample_type == 'sample_under_pdf':
+            param_grid_indices = np.arange(sum(self.queue.shape))
+            flattened_priority_queue = self.queue.flatten()
+            normalised_flattened_priority_queue = flattened_priority_queue / np.sum(flattened_priority_queue)
+
+            sample = np.random.choice(param_grid_indices, p=normalised_flattened_priority_queue)
+            param_sample_indices = np.array(np.where(param_grid_indices.reshape(self.queue.shape) == sample)).T
+
+            indices = param_sample_indices[0].tolist()
+
+        elif self.sample_type == 'interpolate_and_sample_under_pdf': # probably unnecessary if parameter grid is finely grained enough
+            if len(self.queue.shape) == 2:
+                # get interpolation function
+                interpolated_queue = interpolate.interp2d(np.arange(self.queue.shape[0]), np.arange(self.queue.shape[1]), self.queue)
+                
+                # generate more finely grained dummy grid (1e6 x 1e6)
+                x = np.arange(self.queue.shape[0], step=self.queue.shape[0] / 1e6)
+                y = np.arange(self.queue.shape[1], step=self.queue.shape[1] / 1e6)
+
+                z = interpolated_queue(x, y)
+                # sample according to z
+                raise NotImplementedError(
+                    "Unfinished implementation. Sample according to z, which is more finely grained than priority queue. Use 'sample_under_pdf' sample_type"
+                    "which should have similar properties with simpler implementation wrt consistency of method spec (i.e. returning priority queue indices"
+                    "as well as ultimate parameter values"
+                    )
+            else:
+                raise NotImplementedError(
+                    "Currently interpolation method is only supported for priority queue dimensions of 2 i.e. for tasks specified by two parameters"
+                    )
+
+        else:
+            raise ValueError("No sample_type named {}. Please try either 'max', 'epsilon_greedy', 'sample_under_pdf', or 'interpolate_and_sample_under_pdf'".format(self.sample_type))
 
         # add to sample count of max_indices
         try:
@@ -151,7 +175,7 @@ class PriorityQueue(ABC):
         if self.epsilon > self.epsilon_final and step > self.epsilon_decay_start:
             self.epsilon -= self.epsilon_decay_rate
 
-        return indices, parameter_values, self.epsilon
+        return indices, parameter_values
 
     @abstractmethod
     def visualise_priority_queue(self):
