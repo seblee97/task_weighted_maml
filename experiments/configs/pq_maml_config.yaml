@@ -6,7 +6,7 @@ resume:
   queue_counts:
 
 task_type:                    sin                       # which task to meta-learn e.g. sin- for sinusoid regression
-training_iterations:          500000                    # number of training iterations (total calls to the outer training loop)
+training_iterations:          10000000                  # number of training iterations (total calls to the outer training loop)
 task_batch_size:              25                        # number of tasks sampled per meta-update (per outer loop)
 meta_lr:                      0.001                     # the base learning rate of the generator (the outer loop optimiser)
 inner_update_batch_size:      10                        # number of examples used for inner gradient update (k for k-shot learning)
@@ -37,7 +37,7 @@ priority_queue:
   sample_type:                'epsilon_greedy'          # type of sampling from priority_queue (max, e_greedy, or interpolate)
   epsilon_start:              1.0                       # probability of taking (starting value)
   epsilon_final:              0.1                       # probability of taking (starting value)
-  epsilon_decay_start:        100000                    # training step at which to start epsilon annealing
+  epsilon_decay_start:        50000                    # training step at which to start epsilon annealing
   epsilon_decay_rate:         0.0000001                 # rate at which to anneal epsilon parameter
   block_sizes:                [0.1, 5]                  # size of block in each dimension of parameter space in which to discretize priority queue
   param_ranges:               [[1, 5], [0, 180]]        # range of parameters over whih priority queue is sampled
