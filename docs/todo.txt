@@ -2,8 +2,6 @@ Todos
 - plotting of priority queue scaling to parameters
 - add interpolate etc. methods for priority queue query 
 - make dev and exp branch
-- Make repos a package - with setup for dev
-- Change paths to be consistent with the new package structure
 
 Thoughts
 - if sampling more from higher loss regions of the parameter space leads to a generally less effective meta prior, 
@@ -18,3 +16,8 @@ Done
 - plot/log variance of meta validation loss
 - figure out how to structure repos (folder for experiment scripts, folder for model scripts etc.)
 - compute correlation between how often a parameter range has been picked and the loss in that grid
+- Make repos a package - with setup for dev
+- Change paths to be consistent with the new package structure
+- pdf of losses (to see range/ skew etc)
+- plot sum of priority queues (ensure documentation of clear distinction between this and rthe meta validation loss being computed)
+- change correlation plot to spearmans or something more interpretable between -1 and 1
