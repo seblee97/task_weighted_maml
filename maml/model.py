@@ -223,13 +223,13 @@ class MAML(ABC):
 
             # compute metrics for tb logging
             queue_count_loss_correlation = self.priority_queue.compute_count_loss_correlation()
-            queue_sum = np.sum(self.priority_queue.get_queue())
+            queue_mean = np.mean(self.priority_queue.get_queue())
             queue_std = np.std(self.priority_queue.get_queue())
 
             # write to tensorboard
             self.writer.add_scalar('queue_metrics/epsilon', epsilon, step_count)
             self.writer.add_scalar('queue_metrics/queue_correlation', queue_count_loss_correlation, step_count)
-            self.writer.add_scalar('queue_metrics/queue_sum', queue_sum, step_count)
+            self.writer.add_scalar('queue_metrics/queue_mean', queue_mean, step_count)
             self.writer.add_scalar('queue_metrics/queue_std', queue_std, step_count)
         else:
             task = self._sample_task()
