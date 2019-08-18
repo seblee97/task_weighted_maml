@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import datetime
 import time
+from scipy import stats
 
 from typing import List, Dict, Tuple
 
@@ -30,6 +31,12 @@ class PriorityQueue(ABC):
         self.save_path = save_path
 
         self.queue, self.sample_counts = self._initialise_queue() 
+
+    def get_queue(self):
+        """
+        getter method for priority queue
+        """
+        return self.queue
 
     def _initialise_queue(self):
         """
@@ -154,6 +161,13 @@ class PriorityQueue(ABC):
         Discrete vs continuous, 2d heatmap vs 3d.
         """
         raise NotImplementedError("Base class method")
+
+    @abstractmethod
+    def visualise_priority_queue_loss_distribution(self):
+        """
+        Produces probability distribution plot of losses in the priority queue
+        """
+        raise NotImplementedError("Base class method")
     
     @abstractmethod
     def visualise_sample_counts(self):
@@ -173,9 +187,12 @@ class PriorityQueue(ABC):
         computes the correlation between the number of times a range in the parameter space
         has been queried and the loss associated with that range.
 
-        Correlation is defined with respect to the flattened matrices
+        Correlation is defined as the spearman's rank correlation coefficient 
+        between the flattened matrices
         """
         flattened_losses = self.queue.flatten()
         flattened_counts = self.sample_counts.flatten()
-        return np.correlate(flattened_losses, flattened_counts)[0]
 
+        spearmans_rank = stats.spearmanr(flattened_counts, flattened_losses)
+
+        return spearmans_rank
