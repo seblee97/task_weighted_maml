@@ -274,6 +274,19 @@ class SinePriorityQueue(PriorityQueue):
         else:
             raise NotImplementedError("Visualisation for dictionary queue not implemented")
 
+    def visualise_priority_queue_loss_distribution(self):
+        """
+        Produces probability distribution plot of losses in the priority queue
+        """
+        all_losses = self.queue.flatten()
+
+        bins, hist = np.histogram(all_losses, bins= 0.1 * len(all_losses))
+        bin_centers = (bins[:-1] + bins[1:]) / 2
+
+        fig = plt.figure()
+        plt.plot(bin_centers, hist)
+        return fig
+
     def visualise_sample_counts(self):
         """
         Produces plot of priority queue sampling counts 
