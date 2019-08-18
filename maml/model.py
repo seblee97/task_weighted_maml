@@ -216,7 +216,10 @@ class MAML(ABC):
         # sample a task from task distribution and generate x, y tensors for that task
         if self.priority_sample:
             # query queue for next task parameters
-            max_indices, task_parameters, epsilon = self.priority_queue.query(step=step_count)
+            max_indices, task_parameters = self.priority_queue.query(step=step_count)
+
+            # get epsilon value
+            epsilon = self.priority_queue.get_epsilon()
 
             # get task from parameters returned from query
             task = self._get_task_from_params(task_parameters)
