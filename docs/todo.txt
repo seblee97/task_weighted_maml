@@ -1,6 +1,5 @@
 Todos
 - plotting of priority queue scaling to parameters
-- add interpolate etc. methods for priority queue query 
 - make dev and exp branch
 
 Thoughts
@@ -21,3 +20,4 @@ Done
 - pdf of losses (to see range/ skew etc)
 - plot sum of priority queues (ensure documentation of clear distinction between this and rthe meta validation loss being computed)
 - change correlation plot to spearmans or something more interpretable between -1 and 1
+- add interpolate etc. methods for priority queue query 
