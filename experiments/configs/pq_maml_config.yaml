@@ -27,7 +27,7 @@ use_gpu:                      False                     # whether to use a gpu i
 # task-specific configurations
 sin: 
   domain_bounds:              [-5, 5]                   # domain (x) over which points can be sampled for sin regression
-  amplitude_bounds:           [1, 5]                    # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
+  amplitude_bounds:           [0.1, 0.5]                # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
   phase_bounds:               [0, 180]                  # sample range for phase squeeze of sine curve to be regressed (note will be converted to radians in python)
   fixed_val_blocks:           [0.3, 20]                 # granularity of grid used to generate fixed interval validatio tasks
   
@@ -37,9 +37,9 @@ priority_queue:
   sample_type:                'epsilon_greedy'          # type of sampling from priority_queue (max, e_greedy, or interpolate)
   epsilon_start:              1.0                       # probability of taking (starting value)
   epsilon_final:              0.1                       # probability of taking (starting value)
-  epsilon_decay_start:        50000                    # training step at which to start epsilon annealing
+  epsilon_decay_start:        50000                     # training step at which to start epsilon annealing
   epsilon_decay_rate:         0.0000001                 # rate at which to anneal epsilon parameter
   block_sizes:                [0.1, 5]                  # size of block in each dimension of parameter space in which to discretize priority queue
-  param_ranges:               [[1, 5], [0, 180]]        # range of parameters over whih priority queue is sampled
+  param_ranges:               [[0.1, 0.5], [0, 180]]    # range of parameters over whih priority queue is sampled
   burn_in:                                              # if using argmax without epsilon greedy, need a burn-in to 'fill' priority queue buffer
   initial_value:                                        # value to initialise priority queue elements to  
