@@ -16,6 +16,7 @@ ipython==7.7.0
 ipython-genutils==0.2.0
 jedi==0.14.1
 Jinja2==2.10.1
+joblib==0.13.2
 json5==0.8.5
 jsonschema==3.0.2
 jupyter-client==5.3.1
@@ -25,6 +26,7 @@ jupyterlab-server==1.0.0
 Keras-Applications==1.0.8
 Keras-Preprocessing==1.1.0
 kiwisolver==1.1.0
+-e git+git@github.com:seblee97/maml.git@944cd1f13a20d253bb27dd7eace206aa95ce444d#egg=maml_pq
 Markdown==3.1.1
 MarkupSafe==1.1.1
 matplotlib==3.1.0
@@ -49,6 +51,8 @@ pyrsistent==0.15.4
 python-dateutil==2.8.0
 PyYAML==5.1.1
 pyzmq==18.0.2
+scikit-learn==0.21.3
+scipy==1.3.1
 Send2Trash==1.5.0
 six==1.12.0
 tensorboard==1.13.1
