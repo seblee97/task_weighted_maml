@@ -206,7 +206,7 @@ class PriorityQueue(ABC):
         """
         raise NotImplementedError
 
-    def compute_count_loss_correlation(self):
+    def compute_count_loss_correlation(self) -> float:
         """
         computes the correlation between the number of times a range in the parameter space
         has been queried and the loss associated with that range.
@@ -217,6 +217,6 @@ class PriorityQueue(ABC):
         flattened_losses = self.queue.flatten()
         flattened_counts = self.sample_counts.flatten()
 
-        spearmans_rank = stats.spearmanr(flattened_counts, flattened_losses)
+        spearmans_rank = stats.spearmanr(flattened_counts, flattened_losses).correlation
 
         return spearmans_rank
