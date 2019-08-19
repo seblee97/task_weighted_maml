@@ -1,3 +1,8 @@
+# kill sessions already running
+tmux kill-session -t pq_maml_exp
+tmux kill-session -t standard_maml_exp
+tmux kill-session -t tensorboard
+
 # start tmux sessions one for each experiment
 tmux new -s standard_maml_exp -d
 tmux new -s pq_maml_exp -d
