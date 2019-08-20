@@ -305,7 +305,7 @@ class MAML(ABC):
         validation_losses = []
         validation_figures = []
 
-        validation_tasks = self._get_validation_tasks()
+        validation_parameter_tuples, validation_tasks = self._get_validation_tasks()
 
         for r, val_task in enumerate(validation_tasks):
 
@@ -364,6 +364,22 @@ class MAML(ABC):
         print('--- validation loss @ step {}: {}'.format(step_count, mean_validation_loss))
         self.writer.add_scalar('meta_metrics/meta_validation_loss_mean', mean_validation_loss, step_count)
         self.writer.add_scalar('meta_metrics/meta_validation_loss_std', var_validation_loss, step_count)
+
+        # generate heatmap of validation losses 
+        if self.fixed_validation:
+
+            unique_parameter_range_lens = []
+            num_parameters = len(validation_parameter_tuples[0])
+            for i in range(num_parameters):
+                unique_parameter_range_lens.append(len(np.unique([p[i] for p in validation_parameter_tuples])))
+            validation_losses_grid = np.array(validation_losses).reshape(tuple(unique_parameter_range_lens))
+
+            fig = plt.figure()
+            plt.imshow(validation_losses_grid)
+            plt.colorbar()
+            
+            self.writer.add_figure("validation_losses", fig, step_count)
+
         if visualise:
             for f, fig in enumerate(validation_figures):
                 self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
@@ -380,7 +396,7 @@ class MAML(ABC):
         if self.fixed_validation:
             return self._get_fixed_validation_tasks()
         else:
-            return [self._sample_task() for _ in range(self.validation_task_batch_size)]
+            return _, _, [self._sample_task() for _ in range(self.validation_task_batch_size)]
 
     @abstractmethod
     def _get_fixed_validation_tasks(self):
