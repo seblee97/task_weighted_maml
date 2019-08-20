@@ -129,10 +129,10 @@ class PriorityQueue(ABC):
                     indices = max_indices[0].tolist()
 
         elif self.sample_type == 'sample_under_pdf':
-            param_grid_indices = np.arange(sum(self.queue.shape))
+            param_grid_indices = np.arange(np.prod(self.queue.shape))
             flattened_priority_queue = self.queue.flatten()
             normalised_flattened_priority_queue = flattened_priority_queue / np.sum(flattened_priority_queue)
-
+            
             sample = np.random.choice(param_grid_indices, p=normalised_flattened_priority_queue)
             param_sample_indices = np.array(np.where(param_grid_indices.reshape(self.queue.shape) == sample)).T
 
