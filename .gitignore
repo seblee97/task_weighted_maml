@@ -4,3 +4,4 @@ results/
 runs/
 maml/results/
 experiments/results/
+docs/.ipy*
