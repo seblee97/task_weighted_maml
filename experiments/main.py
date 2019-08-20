@@ -9,14 +9,15 @@ import datetime
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('config', type=str, help='path to configuration file for maml experiment')
+parser.add_argument('-base_config', type=str, help='path to base configuration file for maml experiment', default='configs/base_config.yaml')
+parser.add_argument('-config', type=str, help='path to specific configuration file for maml experiment')
 
 args = parser.parse_args()
 
 if __name__ == "__main__":
 
     # base parameters common to all configs
-    with open('configs/base_config.yaml', 'r') as base_yaml_file:
+    with open(args.base_config, 'r') as base_yaml_file:
         base_params = yaml.load(base_yaml_file, yaml.SafeLoader)
 
     # specific parameters
