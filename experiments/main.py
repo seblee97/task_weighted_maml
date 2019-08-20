@@ -15,10 +15,18 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
 
-    with open(args.config, 'r') as yaml_file:
-        params = yaml.load(yaml_file, yaml.SafeLoader)
+    # base parameters common to all configs
+    with open('configs/base_config.yaml', 'r') as base_yaml_file:
+        base_params = yaml.load(base_yaml_file, yaml.SafeLoader)
 
-    maml_parameters = utils.parameters.MAMLParameters(params) # create object in which to store experiment parameters
+    # specific parameters
+    with open(args.config, 'r') as yaml_file:
+        specific_params = yaml.load(yaml_file, yaml.SafeLoader)
+
+    maml_parameters = utils.parameters.MAMLParameters(base_params) # create object in which to store experiment parameters
+
+    # update base maml parameters with specific parameters
+    maml_parameters.update(specific_params)
 
     exp_timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S')
     experiment_name = maml_parameters.get("experiment_name")
