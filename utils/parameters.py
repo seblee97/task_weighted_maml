@@ -2,6 +2,8 @@ from typing import Any, List, Union
 
 import yaml
 import os
+import collections
+import six
 
 class MAMLParameters(object):
     
@@ -77,3 +79,23 @@ class MAMLParameters(object):
         with open(os.path.join(save_path, "config.yaml"), "w") as f:
             yaml.dump(self._config, f)
 
+    def update(self, specific_params: dict) -> None:
+        """
+        Update parameter entries based on entried in specific_params.
+
+        specific_params could be nested dictionary
+        """
+        def update_dict(original_dictionary, update_dictionary):
+            for key, value in six.iteritems(update_dictionary):
+                sub_dict = original_dictionary.get(key, {})
+                if not isinstance(sub_dict, collections.Mapping): # no more nesting
+                    original_dictionary[key] = value
+                elif isinstance(value, collections.Mapping):
+                    original_dictionary[key] = update_dict(sub_dict, value) # more nesting, recurse
+                else:
+                    original_dictionary[key] = value
+
+            return original_dictionary
+        
+        self._config = update_dict(self._config, specific_params)
+            
