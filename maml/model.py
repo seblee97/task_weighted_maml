@@ -396,7 +396,7 @@ class MAML(ABC):
         if self.fixed_validation:
             return self._get_fixed_validation_tasks()
         else:
-            return _, _, [self._sample_task() for _ in range(self.validation_task_batch_size)]
+            return _, [self._sample_task() for _ in range(self.validation_task_batch_size)]
 
     @abstractmethod
     def _get_fixed_validation_tasks(self):
