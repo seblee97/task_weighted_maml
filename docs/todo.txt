@@ -3,6 +3,12 @@ Short-term Todos
 - make dev and exp branch
 - run experiments again with amplitudes = 0.1 = 0.5 (check finn et al for parameters used)
 - check 'extra input biases' used by finn et al (referenced by cavia paper)
+- amplitude 5, (finn), amplitude 0.5 (zintgraf), learning rate 0.01 (finn)
+- probably should check batch size consistency of naming, particularly for trianing vs validating. What is K, what is number of gradient updates, what is number of tasks being sampled.
+- make a base config and then a parser of sorts for setting separate things, will ensure more consistency in hyperparameters
+- write some tests:
+        updating of priority queue
+        make sure regression converges when lots of updates/k high
 
 Long-term Todos
 - Image completion regression task
@@ -21,7 +27,7 @@ Done
 - model checkpointing doesn't seem to work (fixed maybe - test)
 - random seeds
 - plot/log variance of meta validation loss
-- figure out how to structure repos (folder for experiment scripts, folder for model scripts etc.)
+- figure out how to structure repos (folder for experiment scrvipts, folder for model scripts etc.)
 - compute correlation between how often a parameter range has been picked and the loss in that grid
 - Make repos a package - with setup for dev
 - Change paths to be consistent with the new package structure
