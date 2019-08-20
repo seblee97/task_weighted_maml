@@ -71,7 +71,8 @@ class MAML(ABC):
         self.task_batch_size = self.params.get("task_batch_size")
         self.inner_update_lr = self.params.get("inner_update_lr")
         self.meta_lr = self.params.get("meta_lr")
-        self.inner_update_batch_size = self.params.get("inner_update_batch_size")
+        self.inner_update_k = self.params.get("inner_update_k")
+        self.validation_k = self.params.get("validation_k")
         self.num_inner_updates = self.params.get("num_inner_updates")
         self.validation_num_inner_updates = self.params.get("validation_num_inner_updates")
         self.training_iterations = self.params.get("training_iterations")
@@ -236,7 +237,7 @@ class MAML(ABC):
             self.writer.add_scalar('queue_metrics/queue_std', queue_std, step_count)
         else:
             task = self._sample_task()
-        x_batch, y_batch = self._generate_batch(task=task, batch_size=self.inner_update_batch_size)
+        x_batch, y_batch = self._generate_batch(task=task, batch_size=self.inner_update_k)
 
         for _ in range(self.num_inner_updates):
 
@@ -256,7 +257,7 @@ class MAML(ABC):
                 self.model_inner.biases[j] = self.model_inner.biases[j] - self.inner_update_lr * gradients[i + j + 1].detach()
 
         # generate x, y tensors for meta update task sample
-        meta_update_samples_x, meta_update_samples_y = self._generate_batch(task=task, batch_size=self.inner_update_batch_size)
+        meta_update_samples_x, meta_update_samples_y = self._generate_batch(task=task, batch_size=self.inner_update_k)
 
         # forward pass for meta update
         meta_update_prediction = self.model_inner(meta_update_samples_x)
@@ -317,7 +318,7 @@ class MAML(ABC):
             validation_optimiser = optim.Adam(validation_network.weights + validation_network.biases, lr=self.inner_update_lr)
 
             # sample a task for validation fine-tuning
-            validation_x_batch, validation_y_batch = self._generate_batch(task=val_task, batch_size=self.inner_update_batch_size)
+            validation_x_batch, validation_y_batch = self._generate_batch(task=val_task, batch_size=self.validation_k)
 
             validation_model_iterations.append(([w for w in validation_network.weights], [b for b in validation_network.biases]))
 
@@ -344,7 +345,7 @@ class MAML(ABC):
                 validation_model_iterations.append((current_weights, current_biases))
             
             # sample a new batch from same validation task for testing fine-tuned model
-            test_x_batch, test_y_batch = self._generate_batch(task=val_task, batch_size=self.inner_update_batch_size)
+            test_x_batch, test_y_batch = self._generate_batch(task=val_task, batch_size=self.validation_k)
 
             test_prediction = validation_network(test_x_batch)
             test_loss = self._compute_loss(test_prediction, test_y_batch)
@@ -396,7 +397,7 @@ class MAML(ABC):
         if self.fixed_validation:
             return self._get_fixed_validation_tasks()
         else:
-            return _, [self._sample_task() for _ in range(self.validation_task_batch_size)]
+            return None, [self._sample_task() for _ in range(self.validation_task_batch_size)]
 
     @abstractmethod
     def _get_fixed_validation_tasks(self):
