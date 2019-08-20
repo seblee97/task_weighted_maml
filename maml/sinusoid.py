@@ -157,7 +157,7 @@ class SineMAML(MAML):
         for param_pair in parameter_space_tuples:
             fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
 
-        return fixed_validation_tasks
+        return parameter_space_tuples, fixed_validation_tasks
 
     def _compute_loss(self, prediction, ground_truth):
         loss_function = nn.MSELoss()
@@ -280,8 +280,8 @@ class SinePriorityQueue(PriorityQueue):
         """
         all_losses = self.queue.flatten()
 
-        bins, hist = np.histogram(all_losses, bins= 0.1 * len(all_losses))
-        bin_centers = (bins[:-1] + bins[1:]) / 2
+        hist, bin_edges = np.histogram(all_losses, bins=int(0.1 * len(all_losses)))
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
         fig = plt.figure()
         plt.plot(bin_centers, hist)
