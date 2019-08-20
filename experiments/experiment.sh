@@ -15,9 +15,9 @@ tmux send-keys -t "pq_epsilon_maml_exp" "source /Users/sebastianlee/Dropbox/Docu
 tmux send-keys -t "pq_sample_maml_exp" "source /Users/sebastianlee/Dropbox/Documents/Work/Hack/Environments/meta/bin/activate" C-m
 
 # send keys to run experiments
-tmux send-keys -t "standard_maml_exp" "python main.py configs/maml_config.yaml" C-m
-tmux send-keys -t "pq_epsilon_maml_exp" "python main.py configs/pq_maml_config.yaml" C-m
-tmux send-keys -t "pq_sample_maml_exp" "python main.py configs/pq_sample_maml_config.yaml" C-m
+tmux send-keys -t "standard_maml_exp" "python main.py -config configs/maml_config.yaml" C-m
+tmux send-keys -t "pq_epsilon_maml_exp" "python main.py -config configs/pq_maml_config.yaml" C-m
+tmux send-keys -t "pq_sample_maml_exp" "python main.py -config configs/pq_sample_maml_config.yaml" C-m
 
 # start tmux session for tensorboard, launch tensorboard
 tmux new -s tensorboard -d
