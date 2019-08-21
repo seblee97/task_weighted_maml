@@ -73,11 +73,13 @@ class MAML(ABC):
         self.meta_lr = self.params.get("meta_lr")
         self.inner_update_k = self.params.get("inner_update_k")
         self.validation_k = self.params.get("validation_k")
+        self.test_k = self.params.get("test_k")
         self.num_inner_updates = self.params.get("num_inner_updates")
         self.validation_num_inner_updates = self.params.get("validation_num_inner_updates")
         self.training_iterations = self.params.get("training_iterations")
         self.validation_frequency = self.params.get("validation_frequency")
         self.visualisation_frequency = self.params.get("visualisation_frequency")
+        self.visualise_all = self.params.get("visualise_all")
         self.checkpoint_path = self.params.get("checkpoint_path")
         self.validation_task_batch_size = self.params.get("validation_task_batch_size")
         self.fixed_validation = self.params.get("fixed_validation")
@@ -252,9 +254,9 @@ class MAML(ABC):
 
             # update inner model using current model 
             for i in range(len(self.model_inner.weights)):
-                self.model_inner.weights[i] = self.model_inner.weights[i] - self.inner_update_lr * gradients[i].detach()
+                self.model_inner.weights[i] = self.model_inner.weights[i] - self.inner_update_lr * gradients[i]
             for j in range(len(self.model_inner.biases)):
-                self.model_inner.biases[j] = self.model_inner.biases[j] - self.inner_update_lr * gradients[i + j + 1].detach()
+                self.model_inner.biases[j] = self.model_inner.biases[j] - self.inner_update_lr * gradients[i + j + 1]
 
         # generate x, y tensors for meta update task sample
         meta_update_samples_x, meta_update_samples_y = self._generate_batch(task=task, batch_size=self.inner_update_k)
@@ -281,7 +283,7 @@ class MAML(ABC):
         Training orchestration method, calls outer loop and validation methods
         """
         for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
-            if step_count % self.validation_frequency == 0 and step_count != 0:
+            if step_count % self.validation_frequency == 0:# and step_count != 0:
                 if self.checkpoint_path:
                     self.checkpoint_model(step_count=step_count)
                     if self.priority_sample:
@@ -307,6 +309,8 @@ class MAML(ABC):
         validation_figures = []
 
         validation_parameter_tuples, validation_tasks = self._get_validation_tasks()
+
+        import pdb; pdb.set_trace()
 
         for r, val_task in enumerate(validation_tasks):
 
@@ -336,16 +340,16 @@ class MAML(ABC):
 
                 # update inner model weights
                 for i in range(len(validation_network.weights)):
-                    validation_network.weights[i] = validation_network.weights[i] - self.inner_update_lr * validation_update_grad[i].detach()
+                    validation_network.weights[i] = validation_network.weights[i] - self.inner_update_lr * validation_update_grad[i]
                 for j in range(len(validation_network.biases)):
-                    validation_network.biases[j] = validation_network.biases[j] - self.inner_update_lr * validation_update_grad[i + j + 1].detach()
+                    validation_network.biases[j] = validation_network.biases[j] - self.inner_update_lr * validation_update_grad[i + j + 1]
 
                 current_weights = [w for w in validation_network.weights]
                 current_biases = [w for w in validation_network.biases]
                 validation_model_iterations.append((current_weights, current_biases))
             
             # sample a new batch from same validation task for testing fine-tuned model
-            test_x_batch, test_y_batch = self._generate_batch(task=val_task, batch_size=self.validation_k)
+            test_x_batch, test_y_batch = self._generate_batch(task=val_task, batch_size=self.test_k)
 
             test_prediction = validation_network(test_x_batch)
             test_loss = self._compute_loss(test_prediction, test_y_batch)
@@ -355,7 +359,7 @@ class MAML(ABC):
             if visualise:
                 save_name = 'validation_step_{}_rep_{}.png'.format(step_count, r)
                 validation_fig = self.visualise(
-                    validation_model_iterations, val_task, validation_x_batch, validation_y_batch, save_name=save_name
+                    validation_model_iterations, val_task, validation_x_batch, validation_y_batch, save_name=save_name, visualise_all=self.visualise_all
                     )
                 validation_figures.append(validation_fig)
 
