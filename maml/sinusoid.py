@@ -78,7 +78,7 @@ class SineMAML(MAML):
             return parameters[0] * np.sin(parameters[1] * x)
         return modified_sin
 
-    def visualise(self, model_iterations, task, validation_x, validation_y, save_name):
+    def visualise(self, model_iterations, task, validation_x, validation_y, save_name, visualise_all=True):
 
         dummy_model = SinusoidalNetwork(self.params)
 
@@ -90,13 +90,20 @@ class SineMAML(MAML):
         fig = plt.figure()
         plt.plot(plot_x, plot_y_ground_truth, label="Ground Truth")
 
-        for i, (model_weights, model_biases) in enumerate(model_iterations):
-            
-            dummy_model.weights = model_weights
-            dummy_model.biases = model_biases
+        dummy_model.weights = model_iterations[-1][0]
+        dummy_model.biases = model_iterations[-1][1]
 
-            plot_y_prediction = dummy_model(plot_x_tensor)
-            plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed', label='Fine-tuned MAML {} update'.format(i))
+        final_plot_y_prediction = dummy_model(plot_x_tensor)
+        plt.plot(plot_x, final_plot_y_prediction.cpu().detach().numpy(), linestyle='dashed', linewidth=3.0, label='Fine-tuned MAML final update')
+
+        if visualise_all:
+            for i, (model_weights, model_biases) in enumerate(model_iterations[:-1]):
+                
+                dummy_model.weights = model_weights
+                dummy_model.biases = model_biases
+
+                plot_y_prediction = dummy_model(plot_x_tensor)
+                plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed', label='Fine-tuned MAML {} update'.format(i))
 
         plt.scatter(validation_x.cpu(), validation_y.cpu(), marker='o', label='K Points')
 
@@ -170,7 +177,7 @@ class _SinusoidalNetwork(ModelNetwork):
     def __init__(self, params):
         ModelNetwork.__init__(self, params)
 
-    def construct_layers(self):
+    def _construct_layers(self):
         self.linear1 = nn.Linear(self.params.get("x_dim"), 40)
         self.linear2 = nn.Linear(40, 40)
         self.linear3 = nn.Linear(40, 1)
