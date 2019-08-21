@@ -5,3 +5,6 @@ runs/
 maml/results/
 experiments/results/
 docs/.ipy*
+.ipynb_checkpoints/
+.DS_Store
+maml_pq.egg-info/
