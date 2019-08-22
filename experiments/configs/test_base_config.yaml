@@ -13,7 +13,7 @@ meta_lr:                      0.01                      # the base learning rate
 inner_update_k:               10                        # number of examples used for inner gradient update (k for k-shot learning)
 inner_update_lr:              0.01                      # step size alpha for inner gradient update
 num_inner_updates:            1                         # number of inner gradient updates during training
-validation_num_inner_updates: 1000                      # number of inner gradient updates during fine-tuning in validation/testing
+validation_num_inner_updates: 5000                      # number of inner gradient updates during fine-tuning in validation/testing
 validation_k:                 200                       # number of points given to model during validation step (k for k-shot learning)
 test_k:                       10                        # number of points given as test after fine-tuning
 validation_task_batch_size:   10                        # number of tasks to sample and evaluate in each validation loop
