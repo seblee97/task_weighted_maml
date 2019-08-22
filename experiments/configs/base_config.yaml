@@ -18,7 +18,7 @@ validation_k:                 10                        # number of points given
 test_k:                       10                        # number of points given as test after fine-tuning
 validation_task_batch_size:   10                        # number of tasks to sample and evaluate in each validation loop
 validation_frequency:         1000                      # frequency with which to perform validation during training
-visualisation_frequency:      10000                     # frequency with which to perform visualisation of validation (including logging graphs to tb)
+visualisation_frequency:      1000                      # frequency with which to perform visualisation of validation (including logging graphs to tb)
 visualise_all:                True                      # whether to visualise all updates of test fine-tuning or just final solution
 x_dim:                        1                         # dimension of x input 
 input_dimension:              1                         # dimension of network input 
