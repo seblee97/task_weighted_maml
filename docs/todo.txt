@@ -15,6 +15,7 @@ Long-term Todos
 - RL maml then RL maml plus pq
 - Investigate cavia + pq 
 - Alternatives to vanilla pq (potential msc investigation)
+- Can the network used be the standard one, speak to jarek to reengineer for efficiency?
 
 Thoughts
 - if sampling more from higher loss regions of the parameter space leads to a generally less effective meta prior, 
