@@ -250,7 +250,8 @@ class MAML(ABC):
             loss = self._compute_loss(prediction, y_batch)
 
             # compute gradients wrt inner model copy
-            gradients = torch.autograd.grad(loss, self.model_inner.weights + self.model_inner.biases, create_graph=True, retain_graph=True)
+            inner_trainable_parameters = [w for w in self.model_inner.weights] + [b for b in self.model_inner.biases]
+            gradients = torch.autograd.grad(loss, inner_trainable_parameters, create_graph=True, retain_graph=True)
 
             # update inner model using current model 
             for i in range(len(self.model_inner.weights)):
