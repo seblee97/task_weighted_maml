@@ -310,8 +310,6 @@ class MAML(ABC):
 
         validation_parameter_tuples, validation_tasks = self._get_validation_tasks()
 
-        import pdb; pdb.set_trace()
-
         for r, val_task in enumerate(validation_tasks):
 
             # initialise list of model iterations (used for visualisation of fine-tuning)
@@ -324,7 +322,7 @@ class MAML(ABC):
             # sample a task for validation fine-tuning
             validation_x_batch, validation_y_batch = self._generate_batch(task=val_task, batch_size=self.validation_k)
 
-            validation_model_iterations.append(([w for w in validation_network.weights], [b for b in validation_network.biases]))
+            validation_model_iterations.append(([w.clone() for w in validation_network.weights], [b.clone() for b in validation_network.biases]))
 
             # inner loop update
             for _ in range(self.validation_num_inner_updates):
@@ -338,14 +336,20 @@ class MAML(ABC):
                 # find gradients of validation loss wrt inner model weights
                 validation_update_grad = torch.autograd.grad(validation_loss, validation_network.weights + validation_network.biases)
 
-                # update inner model weights
-                for i in range(len(validation_network.weights)):
-                    validation_network.weights[i] = validation_network.weights[i] - self.inner_update_lr * validation_update_grad[i]
-                for j in range(len(validation_network.biases)):
-                    validation_network.biases[j] = validation_network.biases[j] - self.inner_update_lr * validation_update_grad[i + j + 1]
+                # zero gradients of validation optimiser
+                validation_optimiser.zero_grad()
 
-                current_weights = [w for w in validation_network.weights]
-                current_biases = [w for w in validation_network.biases]
+                # update inner model gradients 
+                for i in range(len(validation_network.weights)):
+                    validation_network.weights[i].grad = validation_update_grad[i].detach()
+                for j in range(len(validation_network.biases)):
+                    validation_network.biases[j].grad = validation_update_grad[i + j + 1].detach()
+
+                # make step in validation optimiser
+                validation_optimiser.step()
+
+                current_weights = [w.clone() for w in validation_network.weights]
+                current_biases = [b.clone() for b in validation_network.biases]
                 validation_model_iterations.append((current_weights, current_biases))
             
             # sample a new batch from same validation task for testing fine-tuned model
