@@ -8,10 +8,10 @@ resume:
 
 task_type:                    sin                       # which task to meta-learn e.g. sin- for sinusoid regression
 training_iterations:          10000000                  # number of training iterations (total calls to the outer training loop)
-task_batch_size:              25                        # number of tasks sampled per meta-update (per outer loop)
-meta_lr:                      0.01                      # the base learning rate of the generator (the outer loop optimiser)
-inner_update_k:               10                        # number of examples used for inner gradient update (k for k-shot learning)
-inner_update_lr:              0.01                      # step size alpha for inner gradient update
+task_batch_size:              4                         # number of tasks sampled per meta-update (per outer loop)
+meta_lr:                      0.001                     # the base learning rate of the generator (the outer loop optimiser)
+inner_update_k:               20                        # number of examples used for inner gradient update (k for k-shot learning)
+inner_update_lr:              0.1                       # step size alpha for inner gradient update
 num_inner_updates:            1                         # number of inner gradient updates during training
 validation_num_inner_updates: 5000                      # number of inner gradient updates during fine-tuning in validation/testing
 validation_k:                 200                       # number of points given to model during validation step (k for k-shot learning)
@@ -30,7 +30,7 @@ priority_sample:                                        # whether to use a prior
 # task-specific configurations
 sin:
   domain_bounds:              [-5, 5]                   # domain (x) over which points can be sampled for sin regression
-  amplitude_bounds:           [0.1, 5]                  # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
+  amplitude_bounds:           [0.1, 0.5]                # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
   phase_bounds:               [0, 180]                  # sample range for phase squeeze of sine curve to be regressed (note will be converted to radians in python)
   fixed_val_blocks:           [0.1, 5]                  # granularity of grid used to generate fixed interval validatio tasks
   
@@ -43,6 +43,6 @@ priority_queue:
   epsilon_decay_start:                                  # training step at which to start epsilon annealing
   epsilon_decay_rate:         0.0000001                 # rate at which to anneal epsilon parameter
   block_sizes:                [0.1, 5]                  # size of block in each dimension of parameter space in which to discretize priority queue
-  param_ranges:               [[0.1, 5], [0, 180]]      # range of parameters over whih priority queue is sampled
+  param_ranges:               [[0.1, 0.5], [0, 180]]    # range of parameters over whih priority queue is sampled
   burn_in:                                              # if using argmax without epsilon greedy, need a burn-in to 'fill' priority queue buffer
   initial_value:                                        # value to initialise priority queue elements to  
