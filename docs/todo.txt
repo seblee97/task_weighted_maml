@@ -1,14 +1,13 @@
 Short-term Todos
 - plotting of priority queue scaling to parameters
-- make dev and exp branch
-- run experiments again with amplitudes = 0.1 = 0.5 (check finn et al for parameters used)
 - check 'extra input biases' used by finn et al (referenced by cavia paper)
-- amplitude 5, (finn), amplitude 0.5 (zintgraf), learning rate 0.01 (finn)
 - probably should check batch size consistency of naming, particularly for trianing vs validating. What is K, what is number of gradient updates, what is number of tasks being sampled.
-- make a base config and then a parser of sorts for setting separate things, will ensure more consistency in hyperparameters
 - write some tests:
         updating of priority queue
         make sure regression converges when lots of updates/k high
+- clean up jax, add documentation and ensure similar interfaces to pytorch model. Merge and make train different for jax/pytorch?
+- clean up results folder
+- do runs on jax, pytorch model
 
 Long-term Todos
 - Image completion regression task
@@ -36,3 +35,7 @@ Done
 - plot sum of priority queues (ensure documentation of clear distinction between this and rthe meta validation loss being computed)
 - change correlation plot to spearmans or something more interpretable between -1 and 1
 - add interpolate etc. methods for priority queue query 
+- make a base config and then a parser of sorts for setting separate things, will ensure more consistency in hyperparameters
+- amplitude 5, (finn), amplitude 0.5 (zintgraf), learning rate 0.01 (finn)
+- run experiments again with amplitudes = 0.1 = 0.5 (check finn et al for parameters used)
+- make dev and exp branch
