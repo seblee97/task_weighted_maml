@@ -1,5 +1,5 @@
 
-from context import maml, utils
+from context import maml, utils, jax_maml
 
 import argparse
 import torch
@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-base_config', type=str, help='path to base configuration file for maml experiment', default='configs/base_config.yaml')
 parser.add_argument('-config', type=str, help='path to specific configuration file for maml experiment')
+parser.add_argument('-framework', type=str, help='jax or pytorch model', default='jax')
 
 args = parser.parse_args()
 
@@ -60,8 +61,12 @@ if __name__ == "__main__":
 
     task = maml_parameters.get("task_type")
     if task == 'sin':
-        SM = maml.sinusoid.SineMAML(maml_parameters, experiment_device)
-        # SM._generate_batch(plot=True)
+        if args.framework == 'pytorch':
+            SM = maml.sinusoid.SineMAML(maml_parameters, experiment_device)
+        elif args.framework == 'jax':
+            SM = jax_maml.jax_sinusoid.SineMAML(maml_parameters, experiment_device)
+        else:
+            raise ValueError("Invalid framework argument. Use 'jax' or 'pytorch'")
         SM.train()
     elif task == 'quadratic':
         QM = maml.quadratic.QuadraticMAML(maml_parameters)
