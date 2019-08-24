@@ -1,3 +1,24 @@
+import random
+import copy
+import time
+import os
+import datetime
+
+from tensorboardX import SummaryWriter
+
+from typing import Any, Tuple, List, Dict
+
+from abc import ABC, abstractmethod
+
+import numpy as onp
+import matplotlib.pyplot as plt
+
+import torch
+from torch import optim
+from torch import nn
+
+from utils.priority import PriorityQueue
+
 import jax.numpy as np
 import numpy as np
 import matplotlib.pyplot as plt
@@ -36,6 +57,7 @@ class MAML(ABC):
         self.validation_task_batch_size = self.params.get("validation_task_batch_size")
         self.fixed_validation = self.params.get("fixed_validation")
         self.priority_sample = self.params.get("priority_sample")
+        self.input_dimension = self.params.get("input_dimension")
 
         # initialise tensorboard writer
         self.writer = SummaryWriter(self.checkpoint_path)
@@ -48,9 +70,13 @@ class MAML(ABC):
         # write copy of config_yaml in model_checkpoint_folder
         self.params.save_configuration(self.checkpoint_path)
 
-        self.network = self._get_model()
+        self.network_initialisation, self.network_forward = self._get_model()
+        input_shape = (-1, self.input_dimension,)
+        random_initialisation = random.PRNGKey(0)
+        output_shape, network_parameters = self.network_initialisation(random_initialisation, input_shape)
+
         self.optimier_initialisation, self.optimiser_update, self.get_params_from_optimiser = self._get_optimiser()
-        self.optimiser_state = self.optimier_initialisation(net_params)
+        self.optimiser_state = self.optimier_initialisation(network_parameters)
 
     @abstractmethod
     def _get_model(self):
@@ -126,20 +152,21 @@ class MAML(ABC):
         inner_sgd_fn = lambda g, state: (state - self.inner_update_lr * g)
         return jax.tree_util.tree_multimap(inner_sgd_fn, gradients, parameters) # TODO (and docstring)
 
-    def _maml_loss(self, parameters, x1, y1, x2, y2):
-        p2 = self.inner_loop_update(parameters, x1, y1)
-        return self._compute_loss(p2, x2, y2)
+    def _maml_loss(self, parameters, x_batch, y_batch, x_validation, y_validation):
+        updated_inner_parameters = self.inner_loop_update(parameters, x_batch, y_batch)
+        loss_for_meta_update = self._compute_loss(updated_inner_parameters, x_validation, y_validation)
+        return loss_for_meta_update
 
-    def batch_maml_loss(self, parameters, x1_b, y1_b, x2_b, y2_b):
-        task_losses = vmap(partial(self._maml_loss, parameters))(x1_b, y1_b, x2_b, y2_b)
+    def batch_maml_loss(self, parameters, x_batch, y_batch, x_validation, y_validation):
+        task_losses = vmap(partial(self._maml_loss, parameters))(x_batch, y_batch, x_validation, y_validation)
         return np.mean(task_losses)
 
-    @jit
-    def _step(self, i, x_batch, y_batch, validation_x, validation_y):
+    def _step(self, i, optimiser_state, x_batch, y_batch, validation_x, validation_y):
         """
         """
+        # import pdb; pdb.set_trace()
         # get parameters of current state of outer model
-        parameters = self.get_params_from_optimiser(self.optimiser_state)
+        parameters = self.get_params_from_optimiser(optimiser_state)
 
         # take derivative of inner loss term wrt outer model parameters (automatically wrt 'parameters' via jax.grad as 'parameters' is 1st arg of maml_loss)
         derivative_fn = jax.grad(self.batch_maml_loss)
@@ -148,23 +175,27 @@ class MAML(ABC):
         gradients = derivative_fn(parameters, x_batch, y_batch, validation_x, validation_y)
 
         # get a validation loss (mostly for logging purposes)
-        validation_loss = self.maml_loss(parameters, x_batch, y_batch, validation_x, validation_y)
+        validation_loss = self.batch_maml_loss(parameters, x_batch, y_batch, validation_x, validation_y)
 
         # make step in outer model optimiser
-        updated_parameters = self.opt_update(i, gradients, self.optimiser_state)
+        updated_optimiser = self.optimiser_update(i, gradients, optimiser_state)
 
-        return updated_parameters, validation_loss
+        return updated_optimiser, validation_loss
+
+    def _fast_step(self):
+        return jit(self._step)
 
     def train(self):
 
         validation_losses = []
 
         for i in range(self.training_iterations):
-            task = self._sample_task()
-            x_train, y_train, x_validation, y_validation = 
-            self.optimiser_state, validation_loss = self._step(i, self.optimiser_state, x_train, y_train, x_validation, y_validation)
+            batch_of_tasks = self._sample_task()
+            x_train, y_train = self._generate_batch(batch_of_tasks)
+            x_validation, y_validation = self._generate_batch(batch_of_tasks)
+            self.optimiser_state, validation_loss = self._fast_step()(i, self.optimiser_state, x_train, y_train, x_validation, y_validation)
             validation_losses.append(validation_loss)
             if i % 1000 == 0:
-                print(i)
+                print(i, x_train.shape, validation_loss)
         net_params = self.get_params_from_optimiser(self.optimiser_state)
-
+        
