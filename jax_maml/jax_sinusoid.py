@@ -167,7 +167,7 @@ class SineMAML(MAML):
 
         def generate_sin(amplitude, phase):
             def modified_sin(x):
-                return amplitude * np.sin(phase * x)
+                return amplitude * np.sin(phase + x)
             return modified_sin
 
         for param_pair in parameter_space_tuples:
