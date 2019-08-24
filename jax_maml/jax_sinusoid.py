@@ -176,9 +176,18 @@ class SineMAML(MAML):
         return parameter_space_tuples, fixed_validation_tasks
 
     def _compute_loss(self, parameters, inputs, ground_truth):
-        predictions = self.network_forward(parameters, inputs)
-        return np.mean((ground_truth - predictions) ** 2)
+        """
+        Computes loss of network
 
+        :param parameters: current weights of model
+        :param inputs: x data
+        :param ground_truth: y_data
+
+        :return loss: loss on ground truth vs output of network applied to inputs
+        """
+        predictions = self.network_forward(parameters, inputs)
+        loss = np.mean((ground_truth - predictions) ** 2)
+        return loss
 
 class SinePriorityQueue(PriorityQueue):
 
