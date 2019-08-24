@@ -142,30 +142,41 @@ class MAML(ABC):
         """
         raise NotImplementedError("Base class abstract method")
 
-    def inner_loop_update(self, parameters, x, y):
+    def inner_loop_update(self, parameters, x_batch, y_batch):
         """
         Inner loop of MAML algorithm, consists of optimisation steps on sampled tasks
 
-        :return
+        :return updated_inner_parameters: updated inner network parameters
         """
-        gradients = jax.grad(self._compute_loss)(parameters, x, y)
+        gradients = jax.grad(self._compute_loss)(parameters, x_batch, y_batch)
         inner_sgd_fn = lambda g, state: (state - self.inner_update_lr * g)
-        return jax.tree_util.tree_multimap(inner_sgd_fn, gradients, parameters) # TODO (and docstring)
+        updated_inner_parameters = jax.tree_util.tree_multimap(inner_sgd_fn, gradients, parameters) # TODO (and docstring)
+        return updated_inner_parameters
 
-    def _maml_loss(self, parameters, x_batch, y_batch, x_validation, y_validation):
+    def _maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta):
         for _ in range(self.num_inner_updates):
             parameters = self.inner_loop_update(parameters, x_batch, y_batch)
-        loss_for_meta_update = self._compute_loss(parameters, x_validation, y_validation)
+        loss_for_meta_update = self._compute_loss(parameters, x_meta, y_meta)
         return loss_for_meta_update
 
-    def batch_maml_loss(self, parameters, x_batch, y_batch, x_validation, y_validation):
-        task_losses = vmap(partial(self._maml_loss, parameters))(x_batch, y_batch, x_validation, y_validation)
+    def batch_maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta):
+        task_losses = vmap(partial(self._maml_loss, parameters))(x_batch, y_batch, x_meta, y_meta)
         return np.mean(task_losses)
 
-    def _step(self, i, optimiser_state, x_batch, y_batch, validation_x, validation_y):
+    def outer_training_loop(self, step_count: int, optimiser_state, x_batch: np.array, y_batch: np.array, x_meta: np.array, y_meta: np.array):
         """
+        Outer loop of MAML algorithm, consists of multiple inner loops and a meta update step
+
+        :param step_count: iteration number
+        :param optimiser_state:
+        :param x_batch:
+        :param y_batch:
+        :param x_meta:
+        :param y_meta:
+
+        :return updated_optimiser
+        :return meta_loss
         """
-        # import pdb; pdb.set_trace()
         # get parameters of current state of outer model
         parameters = self.get_params_from_optimiser(optimiser_state)
 
@@ -173,30 +184,135 @@ class MAML(ABC):
         derivative_fn = jax.grad(self.batch_maml_loss)
 
         # evaluate derivative fn
-        gradients = derivative_fn(parameters, x_batch, y_batch, validation_x, validation_y)
+        gradients = derivative_fn(parameters, x_batch, y_batch, x_meta, y_meta)
 
         # get a validation loss (mostly for logging purposes)
-        validation_loss = self.batch_maml_loss(parameters, x_batch, y_batch, validation_x, validation_y)
+        meta_loss = self.batch_maml_loss(parameters, x_batch, y_batch, x_meta, y_meta)
 
         # make step in outer model optimiser
-        updated_optimiser = self.optimiser_update(i, gradients, optimiser_state)
+        updated_optimiser = self.optimiser_update(step_count, gradients, optimiser_state)
 
-        return updated_optimiser, validation_loss
+        return updated_optimiser, meta_loss
 
-    def _fast_step(self):
-        return jit(self._step)
+    def fast_outer_training_loop(self):
+        """
+        jit accelerated outer loop method
+        """
+        return jit(self.outer_training_loop)
 
     def train(self):
+        """
+        Training orchestration method, calls outer loop and validation methods
+        """
+        meta_losses = []
 
-        validation_losses = []
-
-        for i in range(self.training_iterations):
+        for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
+            if step_count % self.validation_frequency == 0 and step_count != 0:
+                if step_count % self.visualisation_frequency == 0:
+                    vis = True
+                else:
+                    vis = False
+                self.validate(step_count=step_count, visualise=vis)
+            
             batch_of_tasks = self._sample_task()
             x_train, y_train = self._generate_batch(batch_of_tasks)
-            x_validation, y_validation = self._generate_batch(batch_of_tasks)
-            self.optimiser_state, validation_loss = self._fast_step()(i, self.optimiser_state, x_train, y_train, x_validation, y_validation)
-            validation_losses.append(validation_loss)
-            if i % 1000 == 0:
-                print(i, x_train.shape, validation_loss)
+            x_meta, y_meta = self._generate_batch(batch_of_tasks)
+            self.optimiser_state, meta_loss = self._fast_step()(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta)
+            meta_losses.append(meta_loss)
+
         net_params = self.get_params_from_optimiser(self.optimiser_state)
+
+    def validate(self, step_count: int, visualise: bool=True) -> None:
+        """
+        Performs a validation step for loss during training
+
+        :param step_count: number of steps in training undergone (used for pring statement)
+        :param visualise: whether or not to visualise validation run
+        """
+
+        network_parameters = self.get_params_from_optimiser(self.optimiser_state)
+        
+        validation_losses = []
+        validation_figures = []
+
+        validation_parameter_tuples, validation_tasks = self._get_validation_tasks()
+
+        for r, val_task in enumerate(validation_tasks):
+
+            # initialise list of model iterations (used for visualisation of fine-tuning)
+            validation_model_iterations = []
+
+            # sample a task for validation fine-tuning
+            validation_x_batch, validation_y_batch = self._generate_batch(task=val_task, batch_size=self.validation_k)
+
+            validation_model_iterations.append(copy.deepcopy(network_parameters))
+
+            # inner loop update
+            for _ in range(self.validation_num_inner_updates):
+
+                network_parameters = self.inner_loop_update(network_parameters)
+                
+                validation_model_iterations.append(copy.deepcopy(network_parameters))
+            
+            # sample a new batch from same validation task for testing fine-tuned model
+            test_x_batch, test_y_batch = self._generate_batch(task=val_task, batch_size=self.test_k)
+
+            test_loss = self._compute_loss(network_parameters, test_x_batch, test_y_batch)
+
+            validation_losses.append(float(test_loss))
+
+            if visualise:
+                save_name = 'validation_step_{}_rep_{}.png'.format(step_count, r)
+                validation_fig = self.visualise(
+                    validation_model_iterations, val_task, validation_x_batch, validation_y_batch, save_name=save_name, visualise_all=self.visualise_all
+                    )
+                validation_figures.append(validation_fig)
+
+        mean_validation_loss = np.mean(validation_losses)
+        var_validation_loss = np.std(validation_losses)
+
+        print('--- validation loss @ step {}: {}'.format(step_count, mean_validation_loss))
+        self.writer.add_scalar('meta_metrics/meta_validation_loss_mean', mean_validation_loss, step_count)
+        self.writer.add_scalar('meta_metrics/meta_validation_loss_std', var_validation_loss, step_count)
+
+        # generate heatmap of validation losses 
+        if self.fixed_validation:
+
+            unique_parameter_range_lens = []
+            num_parameters = len(validation_parameter_tuples[0])
+            for i in range(num_parameters):
+                unique_parameter_range_lens.append(len(np.unique([p[i] for p in validation_parameter_tuples])))
+            validation_losses_grid = np.array(validation_losses).reshape(tuple(unique_parameter_range_lens))
+
+            fig = plt.figure()
+            plt.imshow(validation_losses_grid)
+            plt.colorbar()
+            
+            self.writer.add_figure("validation_losses", fig, step_count)
+
+        if visualise:
+            for f, fig in enumerate(validation_figures):
+                self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
+        if self.priority_sample:
+            priority_queue_fig = self.priority_queue.visualise_priority_queue()
+            priority_queue_count_fig = self.priority_queue.visualise_sample_counts()
+            priority_queue_loss_dist_fig = self.priority_queue.visualise_priority_queue_loss_distribution()
+            self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
+            self.writer.add_figure("queue_counts", priority_queue_count_fig, step_count)
+            self.writer.add_figure("queue_loss_dist", priority_queue_loss_dist_fig, step_count)
+
+    def _get_validation_tasks(self):
+        """produces set of tasks for use in validation"""
+        if self.fixed_validation:
+            return self._get_fixed_validation_tasks()
+        else:
+            return None, [self._sample_task() for _ in range(self.validation_task_batch_size)]
+
+    @abstractmethod
+    def _get_fixed_validation_tasks(self):
+        """
+        If using fixed validation this method returns a set of tasks that are 
+        'representative' of the task distribution in some meaningful way.
+        """
+        raise NotImplementedError("Base class method")
         
