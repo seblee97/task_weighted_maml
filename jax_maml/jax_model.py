@@ -67,6 +67,19 @@ class MAML(ABC):
         if self.params.get("priority_sample"):
             self.priority_queue = self._get_priority_queue()
 
+        # load previously trained model to continue with
+        if self.params.get(["resume", "model"]):
+            model_checkpoint = self.params.get(["resume", "model"])
+            try:
+                print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint))
+                # checkpoint = torch.load(model_checkpoint)
+                # self.model_inner.load_state_dict(checkpoint['model_state_dict'])
+                self.start_iteration = checkpoint['step'] # int(model_checkpoint.split('_')[-1].split('.')[0])
+            except:
+                raise FileNotFoundError("Resume checkpoint specified in config does not exist.")
+        else:
+            self.start_iteration = 0
+
         # write copy of config_yaml in model_checkpoint_folder
         self.params.save_configuration(self.checkpoint_path)
 
@@ -207,6 +220,7 @@ class MAML(ABC):
         meta_losses = []
 
         for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
+            print("Training Step: {}".format(step_count))
             if step_count % self.validation_frequency == 0 and step_count != 0:
                 if step_count % self.visualisation_frequency == 0:
                     vis = True
@@ -217,7 +231,7 @@ class MAML(ABC):
             batch_of_tasks = self._sample_task()
             x_train, y_train = self._generate_batch(batch_of_tasks)
             x_meta, y_meta = self._generate_batch(batch_of_tasks)
-            self.optimiser_state, meta_loss = self._fast_step()(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta)
+            self.optimiser_state, meta_loss = self.fast_outer_training_loop()(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta)
             meta_losses.append(meta_loss)
 
         net_params = self.get_params_from_optimiser(self.optimiser_state)
@@ -243,19 +257,19 @@ class MAML(ABC):
             validation_model_iterations = []
 
             # sample a task for validation fine-tuning
-            validation_x_batch, validation_y_batch = self._generate_batch(task=val_task, batch_size=self.validation_k)
+            validation_x_batch, validation_y_batch = self._generate_batch(tasks=[val_task])
 
             validation_model_iterations.append(copy.deepcopy(network_parameters))
 
             # inner loop update
             for _ in range(self.validation_num_inner_updates):
 
-                network_parameters = self.inner_loop_update(network_parameters)
+                network_parameters = self.inner_loop_update(network_parameters, validation_x_batch, validation_y_batch)
                 
                 validation_model_iterations.append(copy.deepcopy(network_parameters))
             
             # sample a new batch from same validation task for testing fine-tuned model
-            test_x_batch, test_y_batch = self._generate_batch(task=val_task, batch_size=self.test_k)
+            test_x_batch, test_y_batch = self._generate_batch(tasks=[val_task])
 
             test_loss = self._compute_loss(network_parameters, test_x_batch, test_y_batch)
 
