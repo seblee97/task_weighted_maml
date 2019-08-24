@@ -6,7 +6,7 @@ Short-term Todos
         updating of priority queue
         make sure regression converges when lots of updates/k high
 - clean up jax, add documentation and ensure similar interfaces to pytorch model. Merge and make train different for jax/pytorch?
-- clean up results folder
+- np.savez, get models saved/loaded correctly for jax
 - do runs on jax, pytorch model
 
 Long-term Todos
@@ -39,3 +39,4 @@ Done
 - amplitude 5, (finn), amplitude 0.5 (zintgraf), learning rate 0.01 (finn)
 - run experiments again with amplitudes = 0.1 = 0.5 (check finn et al for parameters used)
 - make dev and exp branch
+- clean up results folder
