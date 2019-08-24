@@ -153,8 +153,9 @@ class MAML(ABC):
         return jax.tree_util.tree_multimap(inner_sgd_fn, gradients, parameters) # TODO (and docstring)
 
     def _maml_loss(self, parameters, x_batch, y_batch, x_validation, y_validation):
-        updated_inner_parameters = self.inner_loop_update(parameters, x_batch, y_batch)
-        loss_for_meta_update = self._compute_loss(updated_inner_parameters, x_validation, y_validation)
+        for _ in range(self.num_inner_updates):
+            parameters = self.inner_loop_update(parameters, x_batch, y_batch)
+        loss_for_meta_update = self._compute_loss(parameters, x_validation, y_validation)
         return loss_for_meta_update
 
     def batch_maml_loss(self, parameters, x_batch, y_batch, x_validation, y_validation):
