@@ -90,32 +90,23 @@ class SineMAML(MAML):
 
     def visualise(self, model_iterations, task, validation_x, validation_y, save_name, visualise_all=True):
 
-        dummy_model = SinusoidalNetwork(self.params)
-
         # ground truth
         plot_x = np.linspace(self.domain_bounds[0], self.domain_bounds[1], 100)
-        plot_x_tensor = torch.tensor([[x] for x in plot_x]).to(self.device)
         plot_y_ground_truth = [task(xi) for xi in plot_x]
 
         fig = plt.figure()
         plt.plot(plot_x, plot_y_ground_truth, label="Ground Truth")
 
-        dummy_model.weights = model_iterations[-1][0]
-        dummy_model.biases = model_iterations[-1][1]
-
-        final_plot_y_prediction = dummy_model(plot_x_tensor)
-        plt.plot(plot_x, final_plot_y_prediction.cpu().detach().numpy(), linestyle='dashed', linewidth=3.0, label='Fine-tuned MAML final update')
+        final_plot_y_prediction = self.network_forward(model_iterations[-1], plot_x.reshape(len(plot_x), 1))
+        plt.plot(plot_x, final_plot_y_prediction, linestyle='dashed', linewidth=3.0, label='Fine-tuned MAML final update')
 
         if visualise_all:
-            for i, (model_weights, model_biases) in enumerate(model_iterations[:-1]):
-                
-                dummy_model.weights = model_weights
-                dummy_model.biases = model_biases
+            for i, (model_iteration) in enumerate(model_iterations[:-1]):
 
-                plot_y_prediction = dummy_model(plot_x_tensor)
-                plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed', label='Fine-tuned MAML {} update'.format(i))
+                plot_y_prediction = self.network_forward(model_iteration, plot_x.reshape(len(plot_x), 1))
+                plt.plot(plot_x, plot_y_prediction, linestyle='dashed', label='Fine-tuned MAML {} update'.format(i))
 
-        plt.scatter(validation_x.cpu(), validation_y.cpu(), marker='o', label='K Points')
+        plt.scatter(validation_x, validation_y, marker='o', label='K Points')
 
         plt.title("Validation of Sinusoid Meta-Regression")
         plt.xlabel(r"x")
