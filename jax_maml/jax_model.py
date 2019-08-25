@@ -296,8 +296,8 @@ class MAML(ABC):
                     )
                 validation_figures.append(validation_fig)
 
-        mean_validation_loss = np.mean(validation_losses)
-        var_validation_loss = np.std(validation_losses)
+        mean_validation_loss = onp.mean(validation_losses)
+        var_validation_loss = onp.std(validation_losses)
 
         if math.isnan(mean_validation_loss):
             import pdb; pdb.set_trace()
@@ -312,8 +312,8 @@ class MAML(ABC):
             unique_parameter_range_lens = []
             num_parameters = len(validation_parameter_tuples[0])
             for i in range(num_parameters):
-                unique_parameter_range_lens.append(len(np.unique([p[i] for p in validation_parameter_tuples])))
-            validation_losses_grid = np.array(validation_losses).reshape(tuple(unique_parameter_range_lens))
+                unique_parameter_range_lens.append(len(onp.unique([p[i] for p in validation_parameter_tuples])))
+            validation_losses_grid = onp.array(validation_losses).reshape(tuple(unique_parameter_range_lens))
 
             fig = plt.figure()
             plt.imshow(validation_losses_grid)
@@ -337,7 +337,7 @@ class MAML(ABC):
         if self.fixed_validation:
             return self._get_fixed_validation_tasks()
         else:
-            return None, self._sample_task(batch_size=self.validation_task_batch_size, validate=True)
+            return None, self._sample_task(batch_size=self.validation_task_batch_size, validate=True)[0]
 
     @abstractmethod
     def _get_fixed_validation_tasks(self):
