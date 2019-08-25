@@ -176,7 +176,6 @@ class MAML(ABC):
         """
         Outer loop of MAML algorithm, consists of multiple inner loops and a meta update step
         """
-
         # get copies of meta network parameters
         weight_copies = [w.clone() for w in self.model_outer.weights]
         bias_copies = [b.clone() for b in self.model_outer.biases]
