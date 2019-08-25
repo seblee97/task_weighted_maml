@@ -38,6 +38,7 @@ if __name__ == "__main__":
         checkpoint_path = 'results/{}/'.format(exp_timestamp)
     maml_parameters.set_property("checkpoint_path", checkpoint_path)
     maml_parameters.set_property("experiment_timestamp", exp_timestamp)
+    maml_parameters.set_property("framework", args.framework)
 
     seed_value = maml_parameters.get("seed")
     
