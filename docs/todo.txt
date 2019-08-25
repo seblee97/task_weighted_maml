@@ -7,7 +7,9 @@ Short-term Todos
         make sure regression converges when lots of updates/k high
 - clean up jax, add documentation and ensure similar interfaces to pytorch model. Merge and make train different for jax/pytorch?
 - np.savez, get models saved/loaded correctly for jax
-- do runs on jax, pytorch model
+- do runs on jax, pytorch models
+- gpu warning
+- profile time of priority queue - it is significantly slower
 
 Long-term Todos
 - Image completion regression task
