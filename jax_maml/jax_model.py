@@ -3,6 +3,7 @@ import copy
 import time
 import os
 import datetime
+import math
 
 from tensorboardX import SummaryWriter
 
@@ -20,7 +21,6 @@ from torch import nn
 from utils.priority import PriorityQueue
 
 import jax.numpy as np
-import numpy as np
 import matplotlib.pyplot as plt
 import jax
 
@@ -58,6 +58,7 @@ class MAML(ABC):
         self.fixed_validation = self.params.get("fixed_validation")
         self.priority_sample = self.params.get("priority_sample")
         self.input_dimension = self.params.get("input_dimension")
+        self.framework = self.params.get("framework")
 
         # initialise tensorboard writer
         self.writer = SummaryWriter(self.checkpoint_path)
@@ -172,8 +173,10 @@ class MAML(ABC):
         loss_for_meta_update = self._compute_loss(parameters, x_meta, y_meta)
         return loss_for_meta_update
 
-    def batch_maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta):
+    def batch_maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta, get_all_losses=False):
         task_losses = vmap(partial(self._maml_loss, parameters))(x_batch, y_batch, x_meta, y_meta)
+        if get_all_losses:
+            return task_losses
         return np.mean(task_losses)
 
     def outer_training_loop(self, step_count: int, optimiser_state, x_batch: np.array, y_batch: np.array, x_meta: np.array, y_meta: np.array):
@@ -181,11 +184,12 @@ class MAML(ABC):
         Outer loop of MAML algorithm, consists of multiple inner loops and a meta update step
 
         :param step_count: iteration number
-        :param optimiser_state:
-        :param x_batch:
-        :param y_batch:
-        :param x_meta:
-        :param y_meta:
+        :param optimiser_state: current state of optimiser
+        :param x_batch: input data for batch on which to train inner loop
+        :param y_batch: ground truth of batch label values 
+        :param x_meta: extra input data sample for meta backprop
+        :param y_meta: labels for extra input data
+        :param max_indices: for use with priority sample, gives indices of queue used in task batch
 
         :return updated_optimiser
         :return meta_loss
@@ -199,13 +203,10 @@ class MAML(ABC):
         # evaluate derivative fn
         gradients = derivative_fn(parameters, x_batch, y_batch, x_meta, y_meta)
 
-        # get a validation loss (mostly for logging purposes)
-        meta_loss = self.batch_maml_loss(parameters, x_batch, y_batch, x_meta, y_meta)
-
         # make step in outer model optimiser
         updated_optimiser = self.optimiser_update(step_count, gradients, optimiser_state)
 
-        return updated_optimiser, meta_loss
+        return updated_optimiser, parameters
 
     def fast_outer_training_loop(self):
         """
@@ -217,8 +218,6 @@ class MAML(ABC):
         """
         Training orchestration method, calls outer loop and validation methods
         """
-        meta_losses = []
-
         for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
             print("Training Step: {}".format(step_count))
             if step_count % self.validation_frequency == 0 and step_count != 0:
@@ -226,13 +225,24 @@ class MAML(ABC):
                     vis = True
                 else:
                     vis = False
-                self.validate(step_count=step_count, visualise=vis)
+                self.validate(step_count=step_count, visualise=vis)  
+
+            batch_of_tasks, max_indices = self._sample_task(batch_size=self.task_batch_size, step_count=step_count)
             
-            batch_of_tasks = self._sample_task()
             x_train, y_train = self._generate_batch(batch_of_tasks)
             x_meta, y_meta = self._generate_batch(batch_of_tasks)
-            self.optimiser_state, meta_loss = self.fast_outer_training_loop()(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta)
-            meta_losses.append(meta_loss)
+
+            self.optimiser_state, parameters = self.fast_outer_training_loop()(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta)
+            
+            # get a validation loss (mostly for logging purposes)
+            meta_loss = onp.asarray(self.batch_maml_loss(parameters, x_train, y_train, x_meta, y_meta, get_all_losses=True))
+            
+            if self.priority_sample:
+                for t in range(len(meta_loss)):
+                    self.priority_queue.insert(key=max_indices[t], data=meta_loss[t])
+
+            self.writer.add_scalar('meta_metrics/meta_update_loss_mean', float(np.mean(meta_loss)), step_count)
+            self.writer.add_scalar('meta_metrics/meta_update_loss_std', float(np.std(meta_loss)), step_count)
 
         net_params = self.get_params_from_optimiser(self.optimiser_state)
 
@@ -243,8 +253,6 @@ class MAML(ABC):
         :param step_count: number of steps in training undergone (used for pring statement)
         :param visualise: whether or not to visualise validation run
         """
-
-        network_parameters = self.get_params_from_optimiser(self.optimiser_state)
         
         validation_losses = []
         validation_figures = []
@@ -255,6 +263,9 @@ class MAML(ABC):
 
             # initialise list of model iterations (used for visualisation of fine-tuning)
             validation_model_iterations = []
+
+            # make copy of current state of outer model to fine tune for validation
+            network_parameters = copy.deepcopy(self.get_params_from_optimiser(self.optimiser_state))
 
             # sample a task for validation fine-tuning
             validation_x_batch, validation_y_batch = self._generate_batch(tasks=[val_task])
@@ -275,6 +286,9 @@ class MAML(ABC):
 
             validation_losses.append(float(test_loss))
 
+            if math.isnan(test_loss):
+                import pdb; pdb.set_trace()
+
             if visualise:
                 save_name = 'validation_step_{}_rep_{}.png'.format(step_count, r)
                 validation_fig = self.visualise(
@@ -285,9 +299,12 @@ class MAML(ABC):
         mean_validation_loss = np.mean(validation_losses)
         var_validation_loss = np.std(validation_losses)
 
+        if math.isnan(mean_validation_loss):
+            import pdb; pdb.set_trace()
+
         print('--- validation loss @ step {}: {}'.format(step_count, mean_validation_loss))
-        self.writer.add_scalar('meta_metrics/meta_validation_loss_mean', mean_validation_loss, step_count)
-        self.writer.add_scalar('meta_metrics/meta_validation_loss_std', var_validation_loss, step_count)
+        self.writer.add_scalar('meta_metrics/validation_loss_mean', mean_validation_loss, step_count)
+        self.writer.add_scalar('meta_metrics/validation_loss_std', var_validation_loss, step_count)
 
         # generate heatmap of validation losses 
         if self.fixed_validation:
@@ -320,7 +337,7 @@ class MAML(ABC):
         if self.fixed_validation:
             return self._get_fixed_validation_tasks()
         else:
-            return None, [self._sample_task() for _ in range(self.validation_task_batch_size)]
+            return None, self._sample_task(batch_size=self.validation_task_batch_size, validate=True)
 
     @abstractmethod
     def _get_fixed_validation_tasks(self):
