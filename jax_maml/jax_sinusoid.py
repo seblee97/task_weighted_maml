@@ -59,19 +59,50 @@ class SineMAML(MAML):
     def _get_optimiser(self):
         return optimizers.adam(step_size=self.meta_lr)
 
-    def _sample_task(self, plot=False):
+    def _sample_task(self, batch_size, plot=False, validate=False, step_count=None):
         """
         returns sin function squashed in x direction by a phase parameter sampled randomly between phase_bounds
         enlarged in the y direction by an apmplitude parameter sampled randomly between amplitude_bounds
         """
         tasks = []
-        for _ in range(self.task_batch_size):
-            amplitude = random.uniform(self.amplitude_bounds[0], self.amplitude_bounds[1])
-            phase = random.uniform(self.phase_bounds[0], self.phase_bounds[1])
-            def modified_sin(x):
-                return amplitude * np.sin(phase + x)
-            tasks.append(modified_sin)
-        return tasks
+        all_max_indices = [] if self.priority_sample else None
+
+        for _ in range(batch_size):
+
+            # sample a task from task distribution and generate x, y tensors for that task
+            if self.priority_sample and not validate:
+
+                # query queue for next task parameters
+                max_indices, task_parameters = self.priority_queue.query(step=step_count)
+                all_max_indices.append(max_indices)
+
+                # get epsilon value
+                epsilon = self.priority_queue.get_epsilon()
+
+                # get task from parameters returned from query
+                task = self._get_task_from_params(task_parameters)
+
+                # compute metrics for tb logging
+                queue_count_loss_correlation = self.priority_queue.compute_count_loss_correlation()
+                queue_mean = np.mean(self.priority_queue.get_queue())
+                queue_std = np.std(self.priority_queue.get_queue())
+
+                # write to tensorboard
+                self.writer.add_scalar('queue_metrics/epsilon', epsilon, step_count)
+                self.writer.add_scalar('queue_metrics/queue_correlation', queue_count_loss_correlation, step_count)
+                self.writer.add_scalar('queue_metrics/queue_mean', queue_mean, step_count)
+                self.writer.add_scalar('queue_metrics/queue_std', queue_std, step_count)
+
+            else:
+                
+                # sample randomly (vanilla maml)
+                amplitude = random.uniform(self.amplitude_bounds[0], self.amplitude_bounds[1])
+                phase = random.uniform(self.phase_bounds[0], self.phase_bounds[1])
+                task = self._get_task_from_params(parameters=[amplitude, phase])
+                
+            tasks.append(task)
+    
+        return tasks, all_max_indices
 
     def _get_task_from_params(self, parameters: List[float]) -> Any:
         """
@@ -100,11 +131,14 @@ class SineMAML(MAML):
         final_plot_y_prediction = self.network_forward(model_iterations[-1], plot_x.reshape(len(plot_x), 1))
         plt.plot(plot_x, final_plot_y_prediction, linestyle='dashed', linewidth=3.0, label='Fine-tuned MAML final update')
 
+        no_tuning_y_prediction = self.network_forward(model_iterations[0], plot_x.reshape(len(plot_x), 1))
+        plt.plot(plot_x, no_tuning_y_prediction, linestyle='dashed', linewidth=3.0, label='Untuned MAML prediction')
+        
         if visualise_all:
-            for i, (model_iteration) in enumerate(model_iterations[:-1]):
+            for i, (model_iteration) in enumerate(model_iterations[1:-1]):
 
                 plot_y_prediction = self.network_forward(model_iteration, plot_x.reshape(len(plot_x), 1))
-                plt.plot(plot_x, plot_y_prediction, linestyle='dashed', label='Fine-tuned MAML {} update'.format(i))
+                plt.plot(plot_x, plot_y_prediction, linestyle='dashed') #, label='Fine-tuned MAML {} update'.format(i))
 
         plt.scatter(validation_x, validation_y, marker='o', label='K Points')
 
