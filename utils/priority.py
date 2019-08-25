@@ -90,12 +90,14 @@ class PriorityQueue(ABC):
     # for inserting an element in the queue
     def insert(self, key, data):
         try:
+            # if self.framework == 'pytorch':
+            #     data = data.cpu().detach().numpy()
             # in case of queue being a dictionary, 'key' is a key into dict object
             if type(self.queue) == dict:
-                self.queue[key] = data.cpu().detach().numpy()
+                self.queue[key] = data
             # in case of queue being a np array, 'key' is a list specifying indices
-            elif type(self.queue) == np.ndarray:    
-                self.queue[tuple(key)] = data.cpu().detach().numpy()
+            elif type(self.queue) == np.ndarray:
+                self.queue[tuple(key)] = data
         except:
             import pdb; pdb.set_trace()
   
