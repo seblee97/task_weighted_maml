@@ -18,13 +18,13 @@ validation_k:                 10                        # number of points given
 test_k:                       10                        # number of points given as test after fine-tuning
 validation_task_batch_size:   10                        # number of tasks to sample and evaluate in each validation loop
 validation_frequency:         1000                      # frequency with which to perform validation during training
-visualisation_frequency:      10000                     # frequency with which to perform visualisation of validation (including logging graphs to tb)
-visualise_all:                True                      # whether to visualise all updates of test fine-tuning or just final solution
+visualisation_frequency:      1000                      # frequency with which to perform visualisation of validation (including logging graphs to tb)
+visualise_all:                False                     # whether to visualise all updates of test fine-tuning or just final solution
 x_dim:                        1                         # dimension of x input 
 input_dimension:              1                         # dimension of network input 
 network_layers:               [40, 40]                  # dimension of layers to be used in network
 output_dimension:             1                         # dimension of network output
-fixed_validation:             True                      # whether to sample randomly during validation or use fixed structured validation tasks
+fixed_validation:             False                     # whether to sample randomly during validation or use fixed structured validation tasks
 priority_sample:                                        # whether to use a priority queue in sampling the inner loop task
   
 # task-specific configurations
