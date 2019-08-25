@@ -10,6 +10,7 @@ Short-term Todos
 - do runs on jax, pytorch models
 - gpu warning
 - profile time of priority queue - it is significantly slower
+- for priotiy queue add framework as an argument to make sure data.detach() works in the pytorch case
 
 Long-term Todos
 - Image completion regression task
