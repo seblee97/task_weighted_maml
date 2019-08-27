@@ -11,6 +11,8 @@ Short-term Todos
 - gpu warning
 - profile time of priority queue - it is significantly slower
 - for priotiy queue add framework as an argument to make sure data.detach() works in the pytorch case
+- add validation loss distribution 
+- add third dimension to sine regression task
 
 Long-term Todos
 - Image completion regression task
