@@ -1,4 +1,4 @@
-from context import maml, utils, jax_maml
+from context import utils, jax_maml
 
 import unittest
 
