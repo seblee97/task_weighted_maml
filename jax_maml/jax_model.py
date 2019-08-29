@@ -65,24 +65,26 @@ class MAML(ABC):
         if self.params.get("priority_sample"):
             self.priority_queue = self._get_priority_queue()
 
-        # load previously trained model to continue with
-        if self.params.get(["resume", "model"]):
-            model_checkpoint = self.params.get(["resume", "model"])
-            try:
-                print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint))
-                self.start_iteration = checkpoint['step'] # int(model_checkpoint.split('_')[-1].split('.')[0])
-            except:
-                raise FileNotFoundError("Resume checkpoint specified in config does not exist.")
-        else:
-            self.start_iteration = 0
-
         # write copy of config_yaml in model_checkpoint_folder
         self.params.save_configuration(self.checkpoint_path)
 
         self.network_initialisation, self.network_forward = self._get_model()
         input_shape = (-1, self.input_dimension,)
         random_initialisation = random.PRNGKey(0)
-        output_shape, network_parameters = self.network_initialisation(random_initialisation, input_shape)
+
+        # load previously trained model to continue with
+        if self.params.get(["resume", "model"]):
+            model_checkpoint_path = self.params.get(["resume", "model"])
+            try:
+                print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint_path))
+                model_checkpoint = np.load(model_checkpoint_path, allow_pickle=True)[()]
+                self.start_iteration = model_checkpoint["step"] #.split('_')[-1].split('.')[0])
+                network_parameters = model_checkpoint["network_parameters"]
+            except:
+                raise FileNotFoundError("Resume checkpoint specified in config does not exist.")
+        else:
+            self.start_iteration = 0
+            output_shape, network_parameters = self.network_initialisation(random_initialisation, input_shape)
 
         self.optimier_initialisation, self.optimiser_update, self.get_params_from_optimiser = self._get_optimiser()
         self.optimiser_state = self.optimier_initialisation(network_parameters)
@@ -93,6 +95,21 @@ class MAML(ABC):
         Return jax network
         """
         raise NotImplementedError("Base class method")
+
+    def _checkpoint_model(self, step_count: int, network_parameters: List) -> None:
+        """
+        Save a copy of the network parameters up to this point in training
+
+        :param step_count: iteration number of training (meta-steps)
+        """
+        os.makedirs(self.checkpoint_path, exist_ok=True)
+        timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H-%M-%S')
+        # format of model chekcpoint path: timestamp _ step_count
+        PATH = '{}model_checkpoint_{}_{}.npy'.format(self.checkpoint_path, timestamp, str(step_count))
+        np.save(PATH, {
+            'step': step_count,
+            'network_parameters': network_parameters
+            })
         
     @abstractmethod
     def _get_optimiser(self):
@@ -216,6 +233,11 @@ class MAML(ABC):
         for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
             print("Training Step: {}".format(step_count))
             if step_count % self.validation_frequency == 0 and step_count != 0:
+                if self.checkpoint_path:
+                    current_network_parameters = self.get_params_from_optimiser(self.optimiser_state)
+                    self._checkpoint_model(step_count=step_count, network_parameters=current_network_parameters)
+                if self.priority_sample:
+                    self.priority_queue.save_queue(step_count=step_count)
                 if step_count % self.visualisation_frequency == 0:
                     vis = True
                 else:
