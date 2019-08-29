@@ -1,0 +1,7 @@
+experiment_name:              vanilla
+
+priority_sample:              True                      # whether to use a priority queue in sampling the inner loop task
+  
+priority_queue:
+  sample_type:                'epsilon_greedy'          # type of sampling from priority_queue (max, e_greedy, or interpolate)
+  epsilon_decay_start:        10000000                  # training step at which to start epsilon annealing
