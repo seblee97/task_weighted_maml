@@ -325,8 +325,8 @@ class MAML(ABC):
             for f, fig in enumerate(validation_figures):
                 self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
         if self.priority_sample:
-            priority_queue_fig = self.priority_queue.visualise_priority_queue()
-            priority_queue_count_fig = self.priority_queue.visualise_sample_counts()
+            priority_queue_fig = self.priority_queue.visualise_priority_queue(feature='losses')
+            priority_queue_fig = self.priority_queue.visualise_sample_counts(feature='counts')
             priority_queue_loss_dist_fig = self.priority_queue.visualise_priority_queue_loss_distribution()
             self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
             self.writer.add_figure("queue_counts", priority_queue_count_fig, step_count)
