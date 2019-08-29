@@ -21,6 +21,7 @@ class SineMAML(MAML):
         # extract relevant task-specific parameters
         self.amplitude_bounds = params.get(['sin', 'amplitude_bounds'])
         self.domain_bounds = params.get(['sin', 'domain_bounds'])
+        self.frequency_bounds = params.get(['sin', 'frequency_bounds'])
         degree_phase_bounds = params.get(['sin', 'phase_bounds']) # phase given in degrees
         block_sizes = params.get(['sin', 'fixed_val_blocks']) 
 
@@ -98,7 +99,13 @@ class SineMAML(MAML):
                 # sample randomly (vanilla maml)
                 amplitude = random.uniform(self.amplitude_bounds[0], self.amplitude_bounds[1])
                 phase = random.uniform(self.phase_bounds[0], self.phase_bounds[1])
-                task = self._get_task_from_params(parameters=[amplitude, phase])
+                
+                if self.frequency_bounds:
+                    frequency_scaling = random.uniform(self.frequency_bounds[0], self.frequency_bounds[1])
+                else:
+                    frequency_scaling = 1
+                
+                task = self._get_task_from_params(parameters=[amplitude, phase, frequency_scaling])
                 
             tasks.append(task)
     
@@ -116,7 +123,7 @@ class SineMAML(MAML):
         defined by parameters given)
         """
         def modified_sin(x):
-            return parameters[0] * np.sin(parameters[1] + x)
+            return parameters[0] * np.sin(parameters[1] + parameters[2] * x)
         return modified_sin
 
     def visualise(self, model_iterations, task, validation_x, validation_y, save_name, visualise_all=True):
@@ -160,17 +167,6 @@ class SineMAML(MAML):
         x_batch = np.stack([np.random.uniform(low=self.domain_bounds[0], high=self.domain_bounds[1], size=(self.inner_update_k, 1)) for _ in range(len(tasks))])
         y_batch = np.stack([[tasks[t](x) for x in x_batch[t]] for t in range(len(tasks))])
 
-        # print(x_batch_tensor, y_batch_tensor)
-        # print(x_batch_tensor.shape, y_batch_tensor.shape)
-        # print(x_batch_tensor.dtype)       
-
-        if plot:
-            fig = plt.figure()
-            x = np.linspace(self.domain_bounds[0], self.domain_bounds[1], 100)
-            y = [task(xi) for xi in x]
-            plt.plot(x, y)
-            fig.savefig('sin_batch_test.png')
-            plt.close()
         return x_batch, y_batch
 
     def _get_fixed_validation_tasks(self):
@@ -181,22 +177,32 @@ class SineMAML(MAML):
         In the case of sinusoidal regression we split the parameter space equally.
         """
         # mesh of equally partitioned state space
-        amplitude_spectrum, phase_spectrum = np.mgrid[
-            self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.block_sizes[0],
-            self.phase_bounds[0]:self.phase_bounds[1]:self.block_sizes[1]
-            ]
-
-        parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
+        if self.frequency_bounds:
+            amplitude_spectrum, phase_spectrum, frequency_spectrum = np.mgrid[
+                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.block_sizes[0],
+                self.phase_bounds[0]:self.phase_bounds[1]:self.block_sizes[1],
+                self.frequency_bounds[0]:self.frequency_bounds[1]:self.block_sizes[2]
+                ]
+            parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten(), frequency_spectrum.flatten())).T
+        else:
+            amplitude_spectrum, phase_spectrum = np.mgrid[
+                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.block_sizes[0],
+                self.phase_bounds[0]:self.phase_bounds[1]:self.block_sizes[1]
+                ]
+            parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
 
         fixed_validation_tasks = []
 
-        def generate_sin(amplitude, phase):
+        def generate_sin(amplitude, phase, frequency=1):
             def modified_sin(x):
-                return amplitude * np.sin(phase + x)
+                return amplitude * np.sin(phase + frequency * x)
             return modified_sin
 
         for param_pair in parameter_space_tuples:
-            fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
+            if self.frequency_bounds:
+                fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1], frequency=param_pair[2]))
+            else:
+                fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
 
         return parameter_space_tuples, fixed_validation_tasks
 
@@ -217,7 +223,7 @@ class SineMAML(MAML):
 class SinePriorityQueue(PriorityQueue):
 
     def __init__(self, 
-                block_sizes: Dict[str, float], param_ranges: Dict[str, Tuple[float, float]], 
+                block_sizes: Dict[str, float], param_ranges: List[Tuple[float, float]], 
                 sample_type: str, epsilon_start: float, epsilon_final: float, epsilon_decay_rate: float, epsilon_decay_start: int,
                 queue_resume: str, counts_resume: str, save_path: str, burn_in: int=None, initial_value: float=None
                 ):
@@ -228,8 +234,8 @@ class SinePriorityQueue(PriorityQueue):
             ]
         phase_block_size = block_sizes[1] * (2 * np.pi) / 360
 
-        param_ranges = [param_ranges[0], phase_ranges]
-        block_sizes = [block_sizes[0], phase_block_size]
+        param_ranges[1] = phase_ranges
+        block_sizes[1] = phase_block_size
         
         super().__init__(
             block_sizes=block_sizes, param_ranges=param_ranges, sample_type=sample_type, epsilon_start=epsilon_start,
