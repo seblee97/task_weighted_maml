@@ -252,16 +252,24 @@ class SinePriorityQueue(PriorityQueue):
         ylabels = np.arange(self.param_ranges[0][0], self.param_ranges[0][1], self.block_sizes[0])
         return xlocs, ylocs, xlabels, ylabels
 
-    def visualise_priority_queue(self):
+    def visualise_priority_queue(self, feature='losses'):
         """
-        Produces plot of priority queue. 
+        Produces plot of priority queue (losses or counts) 
 
         Discrete vs continuous, 2d heatmap vs 3d.
+
+        :param feature: which aspect of queue to visualise. 'losses' or 'counts'
+        :retrun fig: matplotlib figure showing heatmap of priority queue feature
         """
         if type(self.queue) == np.ndarray:
             if len(self.queue.shape) == 2:
                 fig = plt.figure()
-                plt.imshow(self.queue)
+                if feature == 'losses':
+                    plt.imshow(self.queue)
+                elif feature == 'counts':
+                    plt.imshow(self.sample_counts)
+                else:
+                    raise ValueError("feature type not recognised. Use 'losses' or 'counts'")
                 plt.colorbar()
                 plt.xlabel("Phase")
                 plt.ylabel("Amplitude")
@@ -293,26 +301,4 @@ class SinePriorityQueue(PriorityQueue):
 
         fig = plt.figure()
         plt.plot(bin_centers, hist)
-        return fig
-
-    def visualise_sample_counts(self):
-        """
-        Produces plot of priority queue sampling counts 
-        """
-        fig = plt.figure()
-        plt.imshow(self.sample_counts)
-        plt.colorbar()
-        plt.xlabel("Phase")
-        plt.ylabel("Amplitude")
-
-        # set labels to sine specific parameter ranges
-        # plt.xticks(
-        #     locs=self.figure_locsx, 
-        #     labels=self.figure_labelsx
-        #     )
-        # plt.yticks(
-        #     locs=self.figure_locsy, 
-        #     labels=self.figure_labelsy
-        #     )
-
         return fig
