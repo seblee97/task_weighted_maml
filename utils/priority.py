@@ -194,13 +194,6 @@ class PriorityQueue(ABC):
         Produces probability distribution plot of losses in the priority queue
         """
         raise NotImplementedError("Base class method")
-    
-    @abstractmethod
-    def visualise_sample_counts(self):
-        """
-        Produces plot of priority queue sampling counts 
-        """
-        raise NotImplementedError("Base class method")
 
     def interpolate_discrete_queue(self):
         """
