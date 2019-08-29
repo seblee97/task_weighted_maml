@@ -286,7 +286,8 @@ class SinePriorityQueue(PriorityQueue):
 
                 return fig
             else:
-                raise ValueError("Visualisation with parameter space dimension > 2 not supported")
+                raise Warning("Visualisation with parameter space dimension > 2 not supported")
+                return None
         else:
             raise NotImplementedError("Visualisation for dictionary queue not implemented")
 
