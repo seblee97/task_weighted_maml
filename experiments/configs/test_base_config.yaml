@@ -17,8 +17,8 @@ validation_num_inner_updates: 5                                # number of inner
 validation_k:                 10                               # number of points given to model during validation step (k for k-shot learning)
 test_k:                       10                               # number of points given as test after fine-tuning
 validation_task_batch_size:   10                               # number of tasks to sample and evaluate in each validation loop
-validation_frequency:         1000                             # frequency with which to perform validation during training
-visualisation_frequency:      1000                             # frequency with which to perform visualisation of validation (including logging graphs to tb)
+validation_frequency:         10                               # frequency with which to perform validation during training
+visualisation_frequency:      10                               # frequency with which to perform visualisation of validation (including logging graphs to tb)
 visualise_all:                False                            # whether to visualise all updates of test fine-tuning or just final solution
 x_dim:                        1                                # dimension of x input 
 input_dimension:              1                                # dimension of network input 
@@ -33,7 +33,7 @@ sin:
   amplitude_bounds:           [0.1, 5]                         # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
   phase_bounds:               [0, 180]                         # sample range for phase shift of sine curve to be regressed (note will be converted to radians in python)
   frequency_bounds:           [0.5, 2]                         # sample range for frequency squeeze of sine curve to be regressed (note will be converted to radians in python)
-  fixed_val_blocks:           [0.2, 10]                        # granularity of grid used to generate fixed interval validatio tasks
+  fixed_val_blocks:           [2.0, 90, 1.2]                   # granularity of grid used to generate fixed interval validatio tasks
   
 # priority queue configuration
 

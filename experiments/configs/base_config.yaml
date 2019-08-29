@@ -33,7 +33,7 @@ sin:
   amplitude_bounds:           [0.1, 5]                         # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
   phase_bounds:               [0, 180]                         # sample range for phase shift of sine curve to be regressed (note will be converted to radians in python)
   frequency_bounds:           [0.5, 2]                         # sample range for frequency squeeze of sine curve to be regressed (note will be converted to radians in python)
-  fixed_val_blocks:           [0.2, 10]                        # granularity of grid used to generate fixed interval validatio tasks
+  fixed_val_blocks:           [0.2, 10, 0.2]                   # granularity of grid used to generate fixed interval validatio tasks
   
 # priority queue configuration
 
