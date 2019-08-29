@@ -4,6 +4,7 @@ import time
 import os
 import datetime
 import math
+import warnings
 
 from tensorboardX import SummaryWriter
 
@@ -315,22 +316,30 @@ class MAML(ABC):
                 unique_parameter_range_lens.append(len(onp.unique([p[i] for p in validation_parameter_tuples])))
             validation_losses_grid = onp.array(validation_losses).reshape(tuple(unique_parameter_range_lens))
 
-            fig = plt.figure()
-            plt.imshow(validation_losses_grid)
-            plt.colorbar()
-            
-            self.writer.add_figure("validation_losses", fig, step_count)
+            if num_parameters == 2:
+                fig = plt.figure()
+                plt.imshow(validation_losses_grid)
+                plt.colorbar()
+
+                self.writer.add_figure("validation_losses", fig, step_count)
+
+            else:
+                warnings.warn("Visualisation of validation losses with parameter space dimension > 2 not supported", Warning)   
 
         if visualise:
             for f, fig in enumerate(validation_figures):
                 self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
         if self.priority_sample:
             priority_queue_fig = self.priority_queue.visualise_priority_queue(feature='losses')
-            priority_queue_fig = self.priority_queue.visualise_sample_counts(feature='counts')
+            priority_queue_count_fig = self.priority_queue.visualise_priority_queue(feature='counts')
             priority_queue_loss_dist_fig = self.priority_queue.visualise_priority_queue_loss_distribution()
-            self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
-            self.writer.add_figure("queue_counts", priority_queue_count_fig, step_count)
-            self.writer.add_figure("queue_loss_dist", priority_queue_loss_dist_fig, step_count)
+            
+            if priority_queue_fig:
+                self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
+            if priority_queue_count_fig:
+                self.writer.add_figure("queue_counts", priority_queue_count_fig, step_count)
+            if priority_queue_loss_dist_fig:
+                self.writer.add_figure("queue_loss_dist", priority_queue_loss_dist_fig, step_count)
 
     def _get_validation_tasks(self):
         """produces set of tasks for use in validation"""
