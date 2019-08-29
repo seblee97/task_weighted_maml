@@ -8,12 +8,15 @@ cycler==0.10.0
 decorator==4.4.0
 defusedxml==0.6.0
 entrypoints==0.3
+fastcache==1.1.0
 gast==0.2.2
 grpcio==1.21.1
 h5py==2.9.0
 ipykernel==5.1.1
 ipython==7.7.0
 ipython-genutils==0.2.0
+jax==0.1.43
+jaxlib==0.1.26
 jedi==0.14.1
 Jinja2==2.10.1
 joblib==0.13.2
@@ -35,6 +38,7 @@ nbconvert==5.5.0
 nbformat==4.4.0
 notebook==6.0.0
 numpy==1.16.4
+opt-einsum==3.0.1
 pandocfilters==1.4.2
 parso==0.5.1
 pexpect==4.7.0
