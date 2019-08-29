@@ -6,6 +6,7 @@ import math
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import warnings
 
 from typing import Any, Dict, List, Tuple
 
@@ -30,7 +31,8 @@ class SineMAML(MAML):
             degree_phase_bounds[0] * (2 * np.pi) / 360, degree_phase_bounds[1] * (2 * np.pi) / 360
             ]
         
-        self.block_sizes = [block_sizes[0], block_sizes[1] * (2 * np.pi) / 360]
+        block_sizes[1] = block_sizes[1] * (2 * np.pi) / 360
+        self.validation_block_sizes = block_sizes
 
         MAML.__init__(self, params)
 
@@ -179,15 +181,15 @@ class SineMAML(MAML):
         # mesh of equally partitioned state space
         if self.frequency_bounds:
             amplitude_spectrum, phase_spectrum, frequency_spectrum = np.mgrid[
-                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.block_sizes[0],
-                self.phase_bounds[0]:self.phase_bounds[1]:self.block_sizes[1],
-                self.frequency_bounds[0]:self.frequency_bounds[1]:self.block_sizes[2]
+                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.validation_block_sizes[0],
+                self.phase_bounds[0]:self.phase_bounds[1]:self.validation_block_sizes[1],
+                self.frequency_bounds[0]:self.frequency_bounds[1]:self.validation_block_sizes[2]
                 ]
             parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten(), frequency_spectrum.flatten())).T
         else:
             amplitude_spectrum, phase_spectrum = np.mgrid[
-                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.block_sizes[0],
-                self.phase_bounds[0]:self.phase_bounds[1]:self.block_sizes[1]
+                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.validation_block_sizes[0],
+                self.phase_bounds[0]:self.phase_bounds[1]:self.validation_block_sizes[1]
                 ]
             parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
 
@@ -286,7 +288,7 @@ class SinePriorityQueue(PriorityQueue):
 
                 return fig
             else:
-                raise Warning("Visualisation with parameter space dimension > 2 not supported")
+                warnings.warn("Visualisation with parameter space dimension > 2 not supported", Warning)   
                 return None
         else:
             raise NotImplementedError("Visualisation for dictionary queue not implemented")
