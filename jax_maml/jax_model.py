@@ -15,10 +15,6 @@ from abc import ABC, abstractmethod
 import numpy as onp
 import matplotlib.pyplot as plt
 
-import torch
-from torch import optim
-from torch import nn
-
 from utils.priority import PriorityQueue
 
 import jax.numpy as np
@@ -74,8 +70,6 @@ class MAML(ABC):
             model_checkpoint = self.params.get(["resume", "model"])
             try:
                 print("Loading and resuming training from checkpoint @ {}".format(model_checkpoint))
-                # checkpoint = torch.load(model_checkpoint)
-                # self.model_inner.load_state_dict(checkpoint['model_state_dict'])
                 self.start_iteration = checkpoint['step'] # int(model_checkpoint.split('_')[-1].split('.')[0])
             except:
                 raise FileNotFoundError("Resume checkpoint specified in config does not exist.")
@@ -138,7 +132,7 @@ class MAML(ABC):
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
-    def _generate_batch(self, task: Any, batch_size: int=25) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _generate_batch(self, task: Any, batch_size: int=25) -> Tuple:
         """
         Obtain batch of training examples from a sampled task
 
@@ -148,7 +142,7 @@ class MAML(ABC):
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
-    def _compute_loss(self, prediction: torch.Tensor, ground_truth: torch.Tensor) -> torch.Tensor:
+    def _compute_loss(self):
         """ 
         Compute loss for prediction based on ground truth
 
