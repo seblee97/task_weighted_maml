@@ -371,7 +371,7 @@ class MAML(ABC):
 
     def _get_validation_loss_distribution_plot(self, validation_losses):
         """returns matplotlib figure showing distribution of validation_losses"""
-        hist, bin_edges = np.histogram(validation_losses, bins=int(0.1 * len(validation_losses)))
+        hist, bin_edges = onp.histogram(validation_losses, bins=int(0.1 * len(validation_losses)))
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
         fig = plt.figure()
