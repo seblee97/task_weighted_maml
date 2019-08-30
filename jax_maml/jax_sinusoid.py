@@ -91,7 +91,8 @@ class SineMAML(MAML):
                 queue_std = np.std(self.priority_queue.get_queue())
 
                 # write to tensorboard
-                self.writer.add_scalar('queue_metrics/epsilon', epsilon, step_count)
+                if epsilon:
+                    self.writer.add_scalar('queue_metrics/epsilon', epsilon, step_count)
                 self.writer.add_scalar('queue_metrics/queue_correlation', queue_count_loss_correlation, step_count)
                 self.writer.add_scalar('queue_metrics/queue_mean', queue_mean, step_count)
                 self.writer.add_scalar('queue_metrics/queue_std', queue_std, step_count)
