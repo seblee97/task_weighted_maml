@@ -315,6 +315,11 @@ class MAML(ABC):
 
         mean_validation_loss = onp.mean(validation_losses)
         var_validation_loss = onp.std(validation_losses)
+        
+        # get validation loss distribution
+        validation_loss_distribution_fig = self._get_validation_loss_distribution_plot(validation_losses)
+        # write validation loss distribution figure to tensorboard
+        self.writer.add_figure("validation_loss_distribution", validation_loss_distribution_fig, step_count)
 
         if math.isnan(mean_validation_loss):
             import pdb; pdb.set_trace()
@@ -323,33 +328,25 @@ class MAML(ABC):
         self.writer.add_scalar('meta_metrics/validation_loss_mean', mean_validation_loss, step_count)
         self.writer.add_scalar('meta_metrics/validation_loss_std', var_validation_loss, step_count)
 
-        # generate heatmap of validation losses 
-        if self.fixed_validation:
-
-            unique_parameter_range_lens = []
-            num_parameters = len(validation_parameter_tuples[0])
-            for i in range(num_parameters):
-                unique_parameter_range_lens.append(len(onp.unique([p[i] for p in validation_parameter_tuples])))
-            validation_losses_grid = onp.array(validation_losses).reshape(tuple(unique_parameter_range_lens))
-
-            if num_parameters == 2:
-                fig = plt.figure()
-                plt.imshow(validation_losses_grid)
-                plt.colorbar()
-
-                self.writer.add_figure("validation_losses", fig, step_count)
-
-            else:
-                warnings.warn("Visualisation of validation losses with parameter space dimension > 2 not supported", Warning)   
+        # get validation loss heatmap as function of parameters governing validation task
+        if self.fixed_validation and len(validation_parameter_tuples[0]) == 2:
+            validation_loss_heatmap_fig = self._get_validation_loss_heatmap(validation_parameter_tuples, validation_losses)
+            self.writer.add_figure("validation_loss_heatmap", validation_loss_heatmap_fig, step_count)
+        else:
+            warnings.warn("Visualisation of validation losses with parameter space dimension > 2 not supported", Warning)
 
         if visualise:
+            # plot qualitative results
             for f, fig in enumerate(validation_figures):
                 self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
+
         if self.priority_sample:
+            # get figures from priority queue
             priority_queue_fig = self.priority_queue.visualise_priority_queue(feature='losses')
             priority_queue_count_fig = self.priority_queue.visualise_priority_queue(feature='counts')
             priority_queue_loss_dist_fig = self.priority_queue.visualise_priority_queue_loss_distribution()
             
+            # write figures from priority queue to tensorboard
             if priority_queue_fig:
                 self.writer.add_figure("priority_queue", priority_queue_fig, step_count)
             if priority_queue_count_fig:
@@ -371,4 +368,28 @@ class MAML(ABC):
         'representative' of the task distribution in some meaningful way.
         """
         raise NotImplementedError("Base class method")
-        
+
+    def _get_validation_loss_distribution_plot(self, validation_losses):
+        """returns matplotlib figure showing distribution of validation_losses"""
+        hist, bin_edges = np.histogram(validation_losses, bins=int(0.1 * len(validation_losses)))
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        fig = plt.figure()
+        plt.plot(bin_centers, hist)
+
+        return fig
+
+    def _get_validation_loss_heatmap(self, validation_parameter_tuples, validation_losses):
+        """returns matplotlib figure showing heatmap of vadliation losses as function of parameter space"""
+        unique_parameter_range_lens = []
+
+        for i in range(2):
+            unique_parameter_range_lens.append(len(onp.unique([p[i] for p in validation_parameter_tuples])))
+        validation_losses_grid = onp.array(validation_losses).reshape(tuple(unique_parameter_range_lens))
+
+        fig = plt.figure()
+        plt.imshow(validation_losses_grid)
+        plt.colorbar()
+
+        return fig
+ 
