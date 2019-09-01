@@ -64,11 +64,18 @@ class SineMAML(MAML):
                     )
 
     def _get_model(self):
-        return stax.serial(
-            Dense(40), Relu,
-            Dense(40), Relu,
-            Dense(1)
-            )
+
+        layers = []
+
+        # inner / hidden network layers + non-linearities
+        for l in self.network_layers:
+            layers.append(Dense(l))
+            layers.append(Relu)
+
+        # output layer (no non-linearity)
+        layers.append(Dense(self.output_dsimension))
+        
+        return stax.serial(*layers)
     
     def _get_optimiser(self):
         return optimizers.adam(step_size=self.meta_lr)
