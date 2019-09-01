@@ -6,7 +6,7 @@ resume:
   priority_queue:             
   queue_counts:
 
-task_type:                    sin                              # which task to meta-learn e.g. sin- for sinusoid regression
+task_type:                    sin2d                            # which task to meta-learn e.g. sin- for sinusoid regression
 training_iterations:          10000000                         # number of training iterations (total calls to the outer training loop)
 task_batch_size:              25                               # number of tasks sampled per meta-update (per outer loop)
 meta_lr:                      0.01                             # the base learning rate of the generator (the outer loop optimiser)
@@ -28,7 +28,13 @@ fixed_validation:             True                             # whether to samp
 priority_sample:                                               # whether to use a priority queue in sampling the inner loop task
   
 # task-specific configurations
-sin:
+sin2d:
+  domain_bounds:              [-5, 5]                          # domain (x) over which points can be sampled for sin regression
+  amplitude_bounds:           [0.1, 5]                         # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
+  phase_bounds:               [0, 180]                         # sample range for phase shift of sine curve to be regressed (note will be converted to radians in python)
+  fixed_val_blocks:           [0.2, 10]                        # granularity of grid used to generate fixed interval validatio tasks
+
+sin3d:
   domain_bounds:              [-5, 5]                          # domain (x) over which points can be sampled for sin regression
   amplitude_bounds:           [0.1, 5]                         # sample range for amplitude of sine curve to be regressed (max height of sinusoid)
   phase_bounds:               [0, 180]                         # sample range for phase shift of sine curve to be regressed (note will be converted to radians in python)
@@ -43,7 +49,9 @@ priority_queue:
   epsilon_final:              0.1                              # probability of taking (starting value)
   epsilon_decay_start:                                         # training step at which to start epsilon annealing
   epsilon_decay_rate:         0.0000001                        # rate at which to anneal epsilon parameter
-  block_sizes:                [0.1, 5, 0.2]                    # size of block in each dimension of parameter space in which to discretize priority queue
-  param_ranges:               [[0.1, 5], [0, 180], [0.5, 2]]   # range of parameters over whih priority queue is sampled
+  block_sizes_2d:             [0.1, 5]                         # size of block in each dimension of parameter space in which to discretize priority queue
+  block_sizes_3d:             [0.1, 5, 0.2]                    # size of block in each dimension of parameter space in which to discretize priority queue
+  param_ranges_2d:            [[0.1, 5], [0, 180]]             # range of parameters over whih priority queue is sampled
+  param_ranges_3d:            [[0.1, 5], [0, 180], [0.5, 2]]   # range of parameters over whih priority queue is sampled
   burn_in:                                                     # if using argmax without epsilon greedy, need a burn-in to 'fill' priority queue buffer
   initial_value:                                               # value to initialise priority queue elements to  
