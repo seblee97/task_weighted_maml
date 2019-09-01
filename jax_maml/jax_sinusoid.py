@@ -18,13 +18,18 @@ class SineMAML(MAML):
 
     def __init__(self, params, device):
         self.device = device
+        self.task_type = params.get('task_type')
 
         # extract relevant task-specific parameters
-        self.amplitude_bounds = params.get(['sin', 'amplitude_bounds'])
-        self.domain_bounds = params.get(['sin', 'domain_bounds'])
-        self.frequency_bounds = params.get(['sin', 'frequency_bounds'])
-        degree_phase_bounds = params.get(['sin', 'phase_bounds']) # phase given in degrees
-        block_sizes = params.get(['sin', 'fixed_val_blocks']) 
+        self.amplitude_bounds = params.get(['sin2d', 'amplitude_bounds'])
+        self.domain_bounds = params.get(['sin2d', 'domain_bounds'])
+        degree_phase_bounds = params.get(['sin2d', 'phase_bounds']) # phase given in degrees
+
+        if self.task_type == 'sin3d':
+            self.frequency_bounds = params.get(['sin3d', 'frequency_bounds'])
+            block_sizes = params.get(['sin3d', 'fixed_val_blocks']) 
+        else:
+            block_sizes = params.get(['sin2d', 'fixed_val_blocks'])
 
         # convert phase bounds/ fixed_val_interval from degrees to radians
         self.phase_bounds = [
