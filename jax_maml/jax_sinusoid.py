@@ -94,7 +94,13 @@ class SineMAML(MAML):
                 epsilon = self.priority_queue.get_epsilon()
 
                 # get task from parameters returned from query
-                task = self._get_task_from_params(task_parameters)
+                amplitude = task_parameters[0]
+                phase = task_parameters[1]
+                if self.task_type == 'sin3d':
+                    frequency_scaling = task_parameters[2]
+                else:
+                    frequency_scaling = 1.
+                task = self._get_task_from_params(amplitude=amplitude, phase=phase, frequency_scaling=frequency_scaling)
 
                 # compute metrics for tb logging
                 queue_count_loss_correlation = self.priority_queue.compute_count_loss_correlation()
