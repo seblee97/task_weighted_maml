@@ -42,12 +42,18 @@ class SineMAML(MAML):
         MAML.__init__(self, params)
 
     def _get_priority_queue(self):
+        if self.task_type == 'sin3d':
+            param_ranges = self.params.get(["priority_queue", "param_ranges_3d"])
+            block_sizes = self.params.get(["priority_queue", "block_sizes_3d"])
+        elif self.task_type == 'sin2d':
+            param_ranges = self.params.get(["priority_queue", "param_ranges_2d"])
+            block_sizes = self.params.get(["priority_queue", "block_sizes_2d"])
         return  SinePriorityQueue(
                     queue_resume=self.params.get(["resume", "priority_queue"]),
                     counts_resume=self.params.get(["resume", "queue_counts"]),
                     sample_type=self.params.get(["priority_queue", "sample_type"]),
-                    block_sizes=self.params.get(["priority_queue", "block_sizes"]),
-                    param_ranges=self.params.get(["priority_queue", "param_ranges"]),
+                    block_sizes=block_sizes,
+                    param_ranges=param_ranges,
                     initial_value=self.params.get(["priority_queue", "initial_value"]),
                     epsilon_start=self.params.get(["priority_queue", "epsilon_start"]),
                     epsilon_final=self.params.get(["priority_queue", "epsilon_final"]),
