@@ -120,18 +120,18 @@ class SineMAML(MAML):
                 amplitude = random.uniform(self.amplitude_bounds[0], self.amplitude_bounds[1])
                 phase = random.uniform(self.phase_bounds[0], self.phase_bounds[1])
                 
-                if self.frequency_bounds:
+                if self.task_type == 'sin3d':
                     frequency_scaling = random.uniform(self.frequency_bounds[0], self.frequency_bounds[1])
                 else:
-                    frequency_scaling = 1
+                    frequency_scaling = 1.
                 
-                task = self._get_task_from_params(parameters=[amplitude, phase, frequency_scaling])
+                task = self._get_task_from_params(amplitude=amplitude, phase=phase, frequency_scaling=frequency_scaling)
                 
             tasks.append(task)
     
         return tasks, all_max_indices
 
-    def _get_task_from_params(self, parameters: List[float]) -> Any:
+    def _get_task_from_params(self, amplitude: float, phase: float, frequency_scaling: float=1.) -> Any:
         """
         Return sine function defined by parameters given
 
@@ -143,7 +143,7 @@ class SineMAML(MAML):
         defined by parameters given)
         """
         def modified_sin(x):
-            return parameters[0] * np.sin(parameters[1] + parameters[2] * x)
+            return amplitude * np.sin(phase + frequency_scaling * x)
         return modified_sin
 
     def visualise(self, model_iterations, task, validation_x, validation_y, save_name, visualise_all=True):
@@ -197,7 +197,7 @@ class SineMAML(MAML):
         In the case of sinusoidal regression we split the parameter space equally.
         """
         # mesh of equally partitioned state space
-        if self.frequency_bounds:
+        if self.task_type == 'sin3d':
             amplitude_spectrum, phase_spectrum, frequency_spectrum = np.mgrid[
                 self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.validation_block_sizes[0],
                 self.phase_bounds[0]:self.phase_bounds[1]:self.validation_block_sizes[1],
@@ -219,7 +219,7 @@ class SineMAML(MAML):
             return modified_sin
 
         for param_pair in parameter_space_tuples:
-            if self.frequency_bounds:
+            if self.task_type == 'sin3d':
                 fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1], frequency=param_pair[2]))
             else:
                 fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
