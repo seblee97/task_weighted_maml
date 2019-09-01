@@ -6,7 +6,7 @@ resume:
   priority_queue:             
   queue_counts:
 
-task_type:                    sin2d                            # which task to meta-learn e.g. sin- for sinusoid regression
+task_type:                    sin3d                            # which task to meta-learn e.g. sin- for sinusoid regression
 training_iterations:          10000000                         # number of training iterations (total calls to the outer training loop)
 task_batch_size:              25                               # number of tasks sampled per meta-update (per outer loop)
 meta_lr:                      0.01                             # the base learning rate of the generator (the outer loop optimiser)
