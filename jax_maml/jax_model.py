@@ -56,6 +56,8 @@ class MAML(ABC):
         self.priority_sample = self.params.get("priority_sample")
         self.input_dimension = self.params.get("input_dimension")
         self.framework = self.params.get("framework")
+        self.network_layers = self.params.get("network_layers")
+        self.output_dimension = self.params.get("output_dimension")
 
         # initialise tensorboard writer
         self.writer = SummaryWriter(self.checkpoint_path)
