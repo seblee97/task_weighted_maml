@@ -73,7 +73,7 @@ class SineMAML(MAML):
             layers.append(Relu)
 
         # output layer (no non-linearity)
-        layers.append(Dense(self.output_dsimension))
+        layers.append(Dense(self.output_dimension))
         
         return stax.serial(*layers)
     
