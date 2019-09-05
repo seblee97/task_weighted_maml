@@ -244,7 +244,7 @@ class MAML(ABC):
                     vis = True
                 else:
                     vis = False
-                self.validate(step_count=step_count, visualise=vis)  
+                self.validate(step_count=step_count, visualise=vis)
 
             batch_of_tasks, max_indices = self._sample_task(batch_size=self.task_batch_size, step_count=step_count)
             
@@ -355,6 +355,12 @@ class MAML(ABC):
                 self.writer.add_figure("queue_counts", priority_queue_count_fig, step_count)
             if priority_queue_loss_dist_fig:
                 self.writer.add_figure("queue_loss_dist", priority_queue_loss_dist_fig, step_count)
+
+    def fast_validate(self):
+        """
+        jit accelerated validation loop
+        """
+        return jit(self.validate)
 
     def _get_validation_tasks(self):
         """produces set of tasks for use in validation"""
