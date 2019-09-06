@@ -86,6 +86,7 @@ class SineMAML(MAML):
         enlarged in the y direction by an apmplitude parameter sampled randomly between amplitude_bounds
         """
         tasks = []
+        task_probabilities = []
         all_max_indices = [] if self.priority_sample else None
 
         for _ in range(batch_size):
@@ -94,8 +95,9 @@ class SineMAML(MAML):
             if self.priority_sample and not validate:
 
                 # query queue for next task parameters
-                max_indices, task_parameters = self.priority_queue.query(step=step_count)
+                max_indices, task_parameters, task_probability = self.priority_queue.query(step=step_count)
                 all_max_indices.append(max_indices)
+                task_probabilities.append(task_probability)
 
                 # get epsilon value
                 epsilon = self.priority_queue.get_epsilon()
@@ -136,7 +138,7 @@ class SineMAML(MAML):
                 
             tasks.append(task)
     
-        return tasks, all_max_indices
+        return tasks, all_max_indices, task_probabilities
 
     def _get_task_from_params(self, amplitude: float, phase: float, frequency_scaling: float=1.) -> Any:
         """
