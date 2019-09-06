@@ -132,14 +132,20 @@ class PriorityQueue(ABC):
                     indices = random.choice(max_indices).tolist()
                 else:
                     indices = max_indices[0].tolist()
+            task_probability = 1.
 
-        elif self.sample_type == 'sample_under_pdf':
+        elif 'sample_under_pdf' in self.sample_type:
             param_grid_indices = np.arange(np.prod(self.queue.shape))
             flattened_priority_queue = self.queue.flatten()
             normalised_flattened_priority_queue = flattened_priority_queue / np.sum(flattened_priority_queue)
             
             sample = np.random.choice(param_grid_indices, p=normalised_flattened_priority_queue)
             param_sample_indices = np.array(np.where(param_grid_indices.reshape(self.queue.shape) == sample)).T
+
+            if 'importance' in self.sample_type:
+                task_probability = normalised_flattened_priority_queue[sample]
+            else:
+                task_probability = 1.
 
             indices = param_sample_indices[0].tolist()
 
@@ -180,7 +186,7 @@ class PriorityQueue(ABC):
         if self.epsilon > self.epsilon_final and step > self.epsilon_decay_start:
             self.epsilon -= self.epsilon_decay_rate
 
-        return indices, parameter_values
+        return indices, parameter_values, task_probability
 
     @abstractmethod
     def visualise_priority_queue(self):
