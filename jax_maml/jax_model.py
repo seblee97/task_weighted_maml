@@ -185,7 +185,7 @@ class MAML(ABC):
     def _maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta, task_probability_weights):
         for _ in range(self.num_inner_updates):
             parameters = self.inner_loop_update(parameters, x_batch, y_batch)
-        if task_probability_weights:
+        if task_probability_weights is not None:
             loss_for_meta_update = task_probability_weights * self._compute_loss(parameters, x_meta, y_meta)
         else:
             loss_for_meta_update = self._compute_loss(parameters, x_meta, y_meta)
@@ -237,8 +237,9 @@ class MAML(ABC):
         """
         Training orchestration method, calls outer loop and validation methods
         """
+        print("Training starting...")
         for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
-            print("Training Step: {}".format(step_count))
+            # print("Training Step: {}".format(step_count))
             if step_count % self.validation_frequency == 0 and step_count != 0:
                 if self.checkpoint_path:
                     current_network_parameters = self.get_params_from_optimiser(self.optimiser_state)
