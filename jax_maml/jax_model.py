@@ -58,6 +58,7 @@ class MAML(ABC):
         self.framework = self.params.get("framework")
         self.network_layers = self.params.get("network_layers")
         self.output_dimension = self.params.get("output_dimension")
+        self.sample_type = self.params.get(["priority_queue", "sample_type"])
 
         # initialise tensorboard writer
         self.writer = SummaryWriter(self.checkpoint_path)
@@ -181,19 +182,22 @@ class MAML(ABC):
         updated_inner_parameters = jax.tree_util.tree_multimap(inner_sgd_fn, gradients, parameters) # TODO (and docstring)
         return updated_inner_parameters
 
-    def _maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta):
+    def _maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta, task_probability_weights):
         for _ in range(self.num_inner_updates):
             parameters = self.inner_loop_update(parameters, x_batch, y_batch)
-        loss_for_meta_update = self._compute_loss(parameters, x_meta, y_meta)
+        if task_probability_weights:
+            loss_for_meta_update = task_probability_weights * self._compute_loss(parameters, x_meta, y_meta)
+        else:
+            loss_for_meta_update = self._compute_loss(parameters, x_meta, y_meta)
         return loss_for_meta_update
 
-    def batch_maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta, get_all_losses=False):
-        task_losses = vmap(partial(self._maml_loss, parameters))(x_batch, y_batch, x_meta, y_meta)
+    def batch_maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta, task_probability_weights, get_all_losses=False):
+        task_losses = vmap(partial(self._maml_loss, parameters))(x_batch, y_batch, x_meta, y_meta, task_probability_weights)
         if get_all_losses:
             return task_losses
         return np.mean(task_losses)
 
-    def outer_training_loop(self, step_count: int, optimiser_state, x_batch: np.array, y_batch: np.array, x_meta: np.array, y_meta: np.array):
+    def outer_training_loop(self, step_count: int, optimiser_state, x_batch: np.array, y_batch: np.array, x_meta: np.array, y_meta: np.array, task_probability_weights: np.array):
         """
         Outer loop of MAML algorithm, consists of multiple inner loops and a meta update step
 
@@ -204,6 +208,7 @@ class MAML(ABC):
         :param x_meta: extra input data sample for meta backprop
         :param y_meta: labels for extra input data
         :param max_indices: for use with priority sample, gives indices of queue used in task batch
+        :param task_probability_weights: weights for individual task losses
 
         :return updated_optimiser
         :return meta_loss
@@ -215,7 +220,7 @@ class MAML(ABC):
         derivative_fn = jax.grad(self.batch_maml_loss)
 
         # evaluate derivative fn
-        gradients = derivative_fn(parameters, x_batch, y_batch, x_meta, y_meta)
+        gradients = derivative_fn(parameters, x_batch, y_batch, x_meta, y_meta, task_probability_weights)
 
         # make step in outer model optimiser
         updated_optimiser = self.optimiser_update(step_count, gradients, optimiser_state)
@@ -246,15 +251,21 @@ class MAML(ABC):
                     vis = False
                 self.validate(step_count=step_count, visualise=vis)
 
-            batch_of_tasks, max_indices = self._sample_task(batch_size=self.task_batch_size, step_count=step_count)
-            
+            batch_of_tasks, max_indices, task_probabilities = self._sample_task(batch_size=self.task_batch_size, step_count=step_count)
+
+            if 'importance' in self.sample_type:
+                standard_task_probabilities = (1. / onp.prod(self.priority_queue.get_queue().shape)) * onp.ones(self.task_batch_size) 
+                task_importance_weights = standard_task_probabilities / task_probabilities
+            else:
+                task_importance_weights = None
+
             x_train, y_train = self._generate_batch(batch_of_tasks)
             x_meta, y_meta = self._generate_batch(batch_of_tasks)
 
-            self.optimiser_state, parameters = self.fast_outer_training_loop()(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta)
+            self.optimiser_state, parameters = self.fast_outer_training_loop()(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta, task_probability_weights=task_importance_weights)
             
             # get a validation loss (mostly for logging purposes)
-            meta_loss = onp.asarray(self.batch_maml_loss(parameters, x_train, y_train, x_meta, y_meta, get_all_losses=True))
+            meta_loss = onp.asarray(self.batch_maml_loss(parameters, x_train, y_train, x_meta, y_meta, task_probability_weights=task_importance_weights, get_all_losses=True))
             
             if self.priority_sample:
                 for t in range(len(meta_loss)):
