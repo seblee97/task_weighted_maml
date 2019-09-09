@@ -275,8 +275,8 @@ class SinePriorityQueue(PriorityQueue):
         self.figure_locsx, self.figure_locsy, self.figure_labelsx, self.figure_labelsy = self._get_figure_labels()
 
     def _get_figure_labels(self):
-        xlocs = np.arange(0, self.queue.shape[1])
-        ylocs = np.arange(0, self.queue.shape[0])
+        xlocs = np.arange(0, self._queue.shape[1])
+        ylocs = np.arange(0, self._queue.shape[0])
         xlabels = np.arange(self.param_ranges[1][0], self.param_ranges[1][1], self.block_sizes[1])
         ylabels = np.arange(self.param_ranges[0][0], self.param_ranges[0][1], self.block_sizes[0])
         return xlocs, ylocs, xlabels, ylabels
@@ -290,11 +290,11 @@ class SinePriorityQueue(PriorityQueue):
         :param feature: which aspect of queue to visualise. 'losses' or 'counts'
         :retrun fig: matplotlib figure showing heatmap of priority queue feature
         """
-        if type(self.queue) == np.ndarray:
-            if len(self.queue.shape) == 2:
+        if type(self._queue) == np.ndarray:
+            if len(self._queue.shape) == 2:
                 fig = plt.figure()
                 if feature == 'losses':
-                    plt.imshow(self.queue)
+                    plt.imshow(self._queue)
                 elif feature == 'counts':
                     plt.imshow(self.sample_counts)
                 else:
@@ -324,7 +324,7 @@ class SinePriorityQueue(PriorityQueue):
         """
         Produces probability distribution plot of losses in the priority queue
         """
-        all_losses = self.queue.flatten()
+        all_losses = self._queue.flatten()
 
         hist, bin_edges = np.histogram(all_losses, bins=int(0.1 * len(all_losses)))
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
