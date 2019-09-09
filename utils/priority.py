@@ -5,10 +5,13 @@ import matplotlib.pyplot as plt
 import datetime
 import time
 from scipy import stats, interpolate
+import copy
 
 from typing import List, Dict, Tuple
 
 from abc import ABC, abstractmethod
+
+import utils.custom_functions
 
 class PriorityQueue(ABC):
 
@@ -30,13 +33,13 @@ class PriorityQueue(ABC):
         self.burn_in = burn_in
         self.save_path = save_path
 
-        self.queue, self.sample_counts = self._initialise_queue() 
+        self._queue, self.sample_counts = self._initialise_queue() 
 
     def get_queue(self):
         """
         getter method for priority queue
         """
-        return self.queue
+        return self._queue
 
     def get_epsilon(self):
         """
@@ -83,12 +86,12 @@ class PriorityQueue(ABC):
         # format of model chekcpoint path: timestamp _ step_count
         queue_path = '{}priority_queue_{}_{}.npz'.format(self.save_path, timestamp, str(step_count))
         counts_path = '{}queue_counts_{}_{}.npz'.format(self.save_path, timestamp, str(step_count))
-        np.savez(queue_path, self.queue)
+        np.savez(queue_path, self._queue)
         np.savez(counts_path, self.sample_counts)
   
     # for checking if the queue is empty 
     def isEmpty(self):
-        return len(self.queue) == 0
+        return len(self._queue) == 0
   
     # for inserting an element in the queue
     def insert(self, key, data):
@@ -96,11 +99,11 @@ class PriorityQueue(ABC):
             # if self.framework == 'pytorch':
             #     data = data.cpu().detach().numpy()
             # in case of queue being a dictionary, 'key' is a key into dict object
-            if type(self.queue) == dict:
-                self.queue[key] = data
+            if type(self._queue) == dict:
+                self._queue[key] = data
             # in case of queue being a np array, 'key' is a list specifying indices
-            elif type(self.queue) == np.ndarray:
-                self.queue[tuple(key)] = data
+            elif type(self._queue) == np.ndarray:
+                self._queue[tuple(key)] = data
         except:
             import pdb; pdb.set_trace()
   
@@ -117,7 +120,9 @@ class PriorityQueue(ABC):
         :return indices: indices of priority queue
         :return parameter_values: values of parameters for task (obtained from indices)
         """
-        if type(self.queue) != np.ndarray:
+        queue_copy = copy.deepcopy(self._queue)
+
+        if type(self._queue) != np.ndarray:
             raise ValueError("Incorrect type for priority queue, must be numpy array")
 
         if self.sample_type == 'max':
@@ -125,9 +130,9 @@ class PriorityQueue(ABC):
 
         elif self.sample_type == 'epsilon_greedy':
             if random.random() < self.epsilon: # select randomly
-                indices = [np.random.randint(d) for d in self.queue.shape]
+                indices = [np.random.randint(d) for d in self._queue.shape]
             else: # select greedily
-                max_indices = np.array(np.where(self.queue == np.amax(self.queue))).T
+                max_indices = np.array(np.where(self._queue == np.amax(self._queue))).T
                 if len(max_indices) > 1:
                     indices = random.choice(max_indices).tolist()
                 else:
@@ -135,28 +140,19 @@ class PriorityQueue(ABC):
             task_probability = 1.
 
         elif 'sample_under_pdf' in self.sample_type:
-            param_grid_indices = np.arange(np.prod(self.queue.shape))
-            flattened_priority_queue = self.queue.flatten()
-            normalised_flattened_priority_queue = flattened_priority_queue / np.sum(flattened_priority_queue)
-            
-            sample = np.random.choice(param_grid_indices, p=normalised_flattened_priority_queue)
-            param_sample_indices = np.array(np.where(param_grid_indices.reshape(self.queue.shape) == sample)).T
 
-            if 'importance' in self.sample_type:
-                task_probability = normalised_flattened_priority_queue[sample]
-            else:
+            indices, task_probability = utils.custom_functions.sample_nd_array(nd_array=self._queue)
+            if "importance" not in self.sample_type:
                 task_probability = 1.
 
-            indices = param_sample_indices[0].tolist()
-
         elif self.sample_type == 'interpolate_and_sample_under_pdf': # probably unnecessary if parameter grid is finely grained enough
-            if len(self.queue.shape) == 2:
+            if len(self._queue.shape) == 2:
                 # get interpolation function
-                interpolated_queue = interpolate.interp2d(np.arange(self.queue.shape[0]), np.arange(self.queue.shape[1]), self.queue)
+                interpolated_queue = interpolate.interp2d(np.arange(self._queue.shape[0]), np.arange(self._queue.shape[1]), self._queue)
                 
                 # generate more finely grained dummy grid (1e6 x 1e6)
-                x = np.arange(self.queue.shape[0], step=self.queue.shape[0] / 1e6)
-                y = np.arange(self.queue.shape[1], step=self.queue.shape[1] / 1e6)
+                x = np.arange(self._queue.shape[0], step=self._queue.shape[0] / 1e6)
+                y = np.arange(self._queue.shape[1], step=self._queue.shape[1] / 1e6)
 
                 z = interpolated_queue(x, y)
                 # sample according to z
@@ -185,6 +181,8 @@ class PriorityQueue(ABC):
         # anneal epsilon
         if self.epsilon > self.epsilon_final and step > self.epsilon_decay_start:
             self.epsilon -= self.epsilon_decay_rate
+
+        assert (self._queue == queue_copy).all(), "Error"
 
         return indices, parameter_values, task_probability
 
@@ -218,7 +216,7 @@ class PriorityQueue(ABC):
         Correlation is defined as the spearman's rank correlation coefficient 
         between the flattened matrices
         """
-        flattened_losses = self.queue.flatten()
+        flattened_losses = self._queue.flatten()
         flattened_counts = self.sample_counts.flatten()
 
         spearmans_rank = stats.spearmanr(flattened_counts, flattened_losses).correlation
