@@ -255,8 +255,9 @@ class MAML(ABC):
             batch_of_tasks, max_indices, task_probabilities = self._sample_task(batch_size=self.task_batch_size, step_count=step_count)
 
             if 'importance' in self.sample_type:
-                standard_task_probabilities = (1. / onp.prod(self.priority_queue.get_queue().shape)) * onp.ones(self.task_batch_size) 
-                task_importance_weights = standard_task_probabilities / task_probabilities
+                standard_task_probability = 1. / onp.prod(self.priority_queue.get_queue().shape)
+                task_importance_weights = standard_task_probability / task_probabilities
+                self.writer.add_scalar('queue_metrics/importance_weights_mean', float(onp.mean(task_importance_weights)), step_count)
             else:
                 task_importance_weights = None
 
@@ -266,8 +267,8 @@ class MAML(ABC):
             self.optimiser_state, parameters = self.fast_outer_training_loop()(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta, task_probability_weights=task_importance_weights)
             
             # get a validation loss (mostly for logging purposes)
-            meta_loss = onp.asarray(self.batch_maml_loss(parameters, x_train, y_train, x_meta, y_meta, task_probability_weights=task_importance_weights, get_all_losses=True))
-            
+            meta_loss = onp.asarray(self.batch_maml_loss(parameters, x_train, y_train, x_meta, y_meta, task_probability_weights=None, get_all_losses=True))
+
             if self.priority_sample:
                 for t in range(len(meta_loss)):
                     self.priority_queue.insert(key=max_indices[t], data=meta_loss[t])
