@@ -33,7 +33,7 @@ class PriorityQueue(ABC):
         self.burn_in = burn_in
         self.save_path = save_path
 
-        self._queue, self.sample_counts = self._initialise_queue() 
+        self._queue, self.sample_counts, self._queue_delta = self._initialise_queue() 
 
     def get_queue(self):
         """
@@ -69,12 +69,16 @@ class PriorityQueue(ABC):
                 pranges.append(int((self.param_ranges[i][1] - self.param_ranges[i][0]) / self.block_sizes[i]))
 
             if self.initial_value:
+                parameter_grid_init = self.initial_value * np.zeros(tuple(pranges))
                 parameter_grid = self.initial_value * np.zeros(tuple(pranges))
+                queue_delta = parameter_grid - parameter_grid_init
             else:
+                parameter_grid_init = np.abs(np.random.normal(0, 1, tuple(pranges)))
                 parameter_grid = np.abs(np.random.normal(0, 1, tuple(pranges)))
+                queue_delta = np.abs(np.random.normal(0, 30, tuple(pranges)))
 
             counts = np.zeros(tuple(pranges))
-        return parameter_grid, counts
+        return parameter_grid, counts, queue_delta
 
     def save_queue(self, step_count):
         """
@@ -103,7 +107,10 @@ class PriorityQueue(ABC):
                 self._queue[key] = data
             # in case of queue being a np array, 'key' is a list specifying indices
             elif type(self._queue) == np.ndarray:
+                current_data = self._queue[tuple(key)]
+                data_delta = current_data - data
                 self._queue[tuple(key)] = data
+                self._queue_delta[tuple(key)] = abs(data_delta)
         except:
             import pdb; pdb.set_trace()
   
@@ -142,6 +149,11 @@ class PriorityQueue(ABC):
         elif 'sample_under_pdf' in self.sample_type:
 
             indices, task_probability = utils.custom_functions.sample_nd_array(nd_array=self._queue)
+            if "importance" not in self.sample_type:
+                task_probability = 1.
+
+        elif 'sample_delta' in self.sample_type:
+            indices, task_probability = utils.custom_functions.sample_nd_array(nd_array=self._queue_delta)
             if "importance" not in self.sample_type:
                 task_probability = 1.
 
