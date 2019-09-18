@@ -2,20 +2,12 @@
 
 cd maml -->
 
-Once cloned, run the following command:
-
-pip install -r requirements.txt
-
-To run experiments, run the following command:
-
-source experiment.sh
-
 # Task-Weighted MAML Repository
 
 ## Table of Contents
 1. [Summary](#summary)
 2. [Installation](#installation)
-3. [Structure of repository](#repository-structure)
+3. [Repository Structure](#repository-structure)
 
 ### Summary
 
@@ -37,9 +29,22 @@ So far the following tasks have been implemented:
 * 2D sinusoidal regression (parameters: phase shift, amplitude)
 * 3D sinusoidal regression (parameters: phase shift, amplitude & frequency scaling)
 
-I hope to add implementations for image classification and control tasks soon. 
+Implementations for image classification and control tasks will hopefully be added soon. 
+
+This repository uses [Jax](https://github.com/google/jax) for the MAML implementation.  
 
 ### Installation
+
+Clone this repository. Then run 
+
+```pip install -r requirements.txt```
+
+The primary requirements are:
+
+* jax
+* numpy
+* matplotlib (for visualisation)
+* tensorboardX (for visualisation)
 
 ### Experiments
 
