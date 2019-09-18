@@ -41,7 +41,34 @@ class SineMAML(MAML):
 
         MAML.__init__(self, params)
 
+    def _get_model(self):
+        """
+        Return jax network initialisation and forward method.
+        """
+        layers = []
+
+        # inner / hidden network layers + non-linearities
+        for l in self.network_layers:
+            layers.append(Dense(l))
+            layers.append(Relu)
+
+        # output layer (no non-linearity)
+        layers.append(Dense(self.output_dimension))
+        
+        # make jax stax object
+        model = stax.serial(*layers)
+
+        return model
+    
+    def _get_optimiser(self):
+        """
+        Return jax optimiser: initialisation, update method and parameter getter method.
+        Optimiser learning rate is given by config (meta_lr).
+        """
+        return optimizers.adam(step_size=self.meta_lr)
+
     def _get_priority_queue(self):
+        """Initiate priority queue"""
         if self.task_type == 'sin3d':
             param_ranges = self.params.get(["priority_queue", "param_ranges_3d"])
             block_sizes = self.params.get(["priority_queue", "block_sizes_3d"])
@@ -63,27 +90,22 @@ class SineMAML(MAML):
                     save_path=self.checkpoint_path
                     )
 
-    def _get_model(self):
-
-        layers = []
-
-        # inner / hidden network layers + non-linearities
-        for l in self.network_layers:
-            layers.append(Dense(l))
-            layers.append(Relu)
-
-        # output layer (no non-linearity)
-        layers.append(Dense(self.output_dimension))
-        
-        return stax.serial(*layers)
-    
-    def _get_optimiser(self):
-        return optimizers.adam(step_size=self.meta_lr)
-
-    def _sample_task(self, batch_size, plot=False, validate=False, step_count=None):
+    def _sample_task(self, batch_size, validate=False, step_count=None):
         """
-        returns sin function squashed in x direction by a phase parameter sampled randomly between phase_bounds
-        enlarged in the y direction by an apmplitude parameter sampled randomly between amplitude_bounds
+        Sample specific task(s) from defined distribution of tasks 
+        E.g. one specific sine function from family of sines
+
+        :param batch_size: number of tasks to sample
+        :param validate: whether or not tasks are being used for validation
+        :param step_count: step count during training 
+
+        :return tasks: batch of tasks
+        :return task_indices: indices of priority queue associated with batch of tasks
+        :return task_probabilities: probabilities of tasks sampled being chosen a priori
+
+        Returns batch of sin functions shifted in x direction by a phase parameter sampled randomly between phase_bounds
+        (set by config) enlarged in the y direction by an amplitude parameter sampled randomly between amplitude_bounds
+        (also set by config). For 3d sine option, function is also squeezed in x direction by freuency parameter.
         """
         tasks = []
         task_probabilities = []
@@ -109,7 +131,8 @@ class SineMAML(MAML):
                     frequency_scaling = task_parameters[2]
                 else:
                     frequency_scaling = 1.
-                task = self._get_task_from_params(amplitude=amplitude, phase=phase, frequency_scaling=frequency_scaling)
+                parameters = [amplitude, phase, frequency_scaling]
+                task = self._get_task_from_params(parameters=parameters)
 
                 # compute metrics for tb logging
                 queue_count_loss_correlation = self.priority_queue.compute_count_loss_correlation()
@@ -134,13 +157,14 @@ class SineMAML(MAML):
                 else:
                     frequency_scaling = 1.
                 
-                task = self._get_task_from_params(amplitude=amplitude, phase=phase, frequency_scaling=frequency_scaling)
+                parameters = [amplitude, phase, frequency_scaling]
+                task = self._get_task_from_params(parameters=parameters)
                 
             tasks.append(task)
     
         return tasks, all_max_indices, task_probabilities
 
-    def _get_task_from_params(self, amplitude: float, phase: float, frequency_scaling: float=1.) -> Any:
+    def _get_task_from_params(self, parameters: List) -> Any:
         """
         Return sine function defined by parameters given
 
@@ -151,11 +175,52 @@ class SineMAML(MAML):
         (method differs from _sample_task in that it is not a random sample but
         defined by parameters given)
         """
+        amplitude = parameters[0]
+        phase = parameters[1]
+        frequency_scaling = parameters[2]
         def modified_sin(x):
             return amplitude * np.sin(phase + frequency_scaling * x)
         return modified_sin
 
-    def visualise(self, model_iterations, task, validation_x, validation_y, save_name, visualise_all=True):
+    def _generate_batch(self, tasks: List): 
+        """
+        Obtain batch of training examples from a list of tasks
+
+        :param tasks: list of tasks for which data points need to be sampled
+        
+        :return x_batch: x points sampled from data
+        :return y_batch: y points associated with x_batch
+        """
+        x_batch = np.stack([np.random.uniform(low=self.domain_bounds[0], high=self.domain_bounds[1], size=(self.inner_update_k, 1)) for _ in range(len(tasks))])
+        y_batch = np.stack([[tasks[t](x) for x in x_batch[t]] for t in range(len(tasks))])
+
+        return x_batch, y_batch
+
+    def _compute_loss(self, parameters, inputs, ground_truth):
+        """
+        Computes loss of network
+
+        :param parameters: current weights of model
+        :param inputs: x data
+        :param ground_truth: y_data
+
+        :return loss: loss on ground truth vs output of network applied to inputs
+        """
+        predictions = self.network_forward(parameters, inputs)
+        loss = np.mean((ground_truth - predictions) ** 2)
+        return loss
+
+    def _visualise(self, model_iterations, task, validation_x, validation_y, save_name, visualise_all=True):
+        """
+        Visualise qualitative run.
+
+        :param validation_model_iterations: parameters of model after successive fine-tuning steps
+        :param val_task: task being evaluated
+        :param validation_x_batch: k data points fed to model for finetuning
+        :param validation_y_batch: ground truth data associated with validation_x_batch
+        :param save_name: name of file to be saved
+        :param visualise_all: whether to visualise all fine-tuning steps or just final 
+        """
 
         # ground truth
         plot_x = np.linspace(self.domain_bounds[0], self.domain_bounds[1], 100)
@@ -188,22 +253,10 @@ class SineMAML(MAML):
 
         return fig
 
-    def _generate_batch(self, tasks: List, plot=False): # Change batch generation to be done in pure PyTorch
-        """
-        generates an array, x_batch, of B datapoints sampled randomly between domain_bounds
-        and computes the sin of each point in x_batch to produce y_batch.
-        """
-        x_batch = np.stack([np.random.uniform(low=self.domain_bounds[0], high=self.domain_bounds[1], size=(self.inner_update_k, 1)) for _ in range(len(tasks))])
-        y_batch = np.stack([[tasks[t](x) for x in x_batch[t]] for t in range(len(tasks))])
-
-        return x_batch, y_batch
-
     def _get_fixed_validation_tasks(self):
         """
         If using fixed validation this method returns a set of tasks that are 
-        'representative' of the task distribution in some meaningful way. 
-
-        In the case of sinusoidal regression we split the parameter space equally.
+        equally spread across the task distribution space.
         """
         # mesh of equally partitioned state space
         if self.task_type == 'sin3d':
@@ -234,20 +287,6 @@ class SineMAML(MAML):
                 fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
 
         return parameter_space_tuples, fixed_validation_tasks
-
-    def _compute_loss(self, parameters, inputs, ground_truth):
-        """
-        Computes loss of network
-
-        :param parameters: current weights of model
-        :param inputs: x data
-        :param ground_truth: y_data
-
-        :return loss: loss on ground truth vs output of network applied to inputs
-        """
-        predictions = self.network_forward(parameters, inputs)
-        loss = np.mean((ground_truth - predictions) ** 2)
-        return loss
 
 class SinePriorityQueue(PriorityQueue):
 

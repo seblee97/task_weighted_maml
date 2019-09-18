@@ -68,6 +68,7 @@ class MAML(ABC):
         # write copy of config_yaml in model_checkpoint_folder
         self.params.save_configuration(self.checkpoint_path)
 
+        # initialise jax model
         self.network_initialisation, self.network_forward = self._get_model()
         input_shape = (-1, self.input_dimension,)
         random_initialisation = random.PRNGKey(0)
@@ -86,13 +87,14 @@ class MAML(ABC):
             self.start_iteration = 0
             output_shape, network_parameters = self.network_initialisation(random_initialisation, input_shape)
 
+        # initialise jax optimiser
         self.optimier_initialisation, self.optimiser_update, self.get_params_from_optimiser = self._get_optimiser()
         self.optimiser_state = self.optimier_initialisation(network_parameters)
 
     @abstractmethod
     def _get_model(self):
         """
-        Return jax network
+        Return jax network initialisation and forward method.
         """
         raise NotImplementedError("Base class method")
 
@@ -101,6 +103,7 @@ class MAML(ABC):
         Save a copy of the network parameters up to this point in training
 
         :param step_count: iteration number of training (meta-steps)
+        :param network_parameters: parameters of network to save
         """
         os.makedirs(self.checkpoint_path, exist_ok=True)
         timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H-%M-%S')
@@ -114,7 +117,8 @@ class MAML(ABC):
     @abstractmethod
     def _get_optimiser(self):
         """
-        Return jax optimiser
+        Return jax optimiser: initialisation, update method and parameter getter method
+        Optimiser learning rate is given by config (meta_lr).
         """
         raise NotImplementedError("Base class method")
 
@@ -124,17 +128,25 @@ class MAML(ABC):
         raise NotImplementedError("Base class method")
 
     @abstractmethod
-    def _sample_task(self) -> Any:
+    def _sample_task(self, batch_size: int, validate:bool=False, step_count=None):
         """
-        Sample specific task from defined distribution of tasks 
+        Sample specific task(s) from defined distribution of tasks 
         E.g. one specific sine function from family of sines
+
+        :param batch_size: number of tasks to sample
+        :param validate: whether or not tasks are being used for validation
+        :param step_count: step count during training 
+
+        :return tasks: batch of tasks
+        :return task_indices: indices of priority queue associated with batch of tasks
+        :return task_probabilities: probabilities of tasks sampled being chosen a priori
 
         Return type dependent of task family
         """
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
-    def _get_task_from_params(self) -> Any:
+    def _get_task_from_params(self, parameters: List) -> Any:
         """
         Get specific task from specific given parameters 
         E.g. one specific sine function from family of sines
@@ -149,39 +161,57 @@ class MAML(ABC):
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
-    def _generate_batch(self, task: Any, batch_size: int=25) -> Tuple:
+    def _generate_batch(self, tasks: List):
         """
-        Obtain batch of training examples from a sampled task
+        Obtain batch of training examples from a list of tasks
 
-        :param task: specific task from which to sample x, y pairs
-        :param batch_size: number of x, y pairs to sample for batch
+        :param tasks: list of tasks for which data points need to be sampled
+        
+        :return x_batch: x points sampled from data
+        :return y_batch: y points associated with x_batch
         """
         raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
-    def _compute_loss(self):
+    def _compute_loss(self, parameters, inputs, ground_truth):
         """ 
         Compute loss for prediction based on ground truth
 
-        :param prediction: output of network for x
-        :param ground_trugh: y value ground truth associated with x
+        :param parameters: current parameters of model
+        :param inputs: x values on which to compute predictions and compute loss
+        :param ground_truth: y value ground truth associated with inputs
         """
         raise NotImplementedError("Base class abstract method")
 
-    def inner_loop_update(self, parameters, x_batch, y_batch):
+    def _inner_loop_update(self, parameters: List, x_batch: np.ndarray, y_batch: np.ndarray) -> List:
         """
         Inner loop of MAML algorithm, consists of optimisation steps on sampled tasks
+
+        :param parameters: current parameters of model
+        :param x_batch: batch of sampled data for each task
+        :param y_batch: ground truth y points associated with x_batch
 
         :return updated_inner_parameters: updated inner network parameters
         """
         gradients = jax.grad(self._compute_loss)(parameters, x_batch, y_batch)
         inner_sgd_fn = lambda g, state: (state - self.inner_update_lr * g)
-        updated_inner_parameters = jax.tree_util.tree_multimap(inner_sgd_fn, gradients, parameters) # TODO (and docstring)
+        updated_inner_parameters = jax.tree_util.tree_multimap(inner_sgd_fn, gradients, parameters)
+
         return updated_inner_parameters
 
-    def _maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta, task_probability_weights):
+    def _maml_loss(self, parameters: List, x_batch: np.ndarray, y_batch: np.ndarray, x_meta, y_meta, task_probability_weights: List):
+        """
+        Calculates loss to be backpropagated through meta network.
+
+        :param parameters: current parameters of model
+        :param x_batch: batch of sampled data for each task
+        :param y_batch: ground truth y points associated with x_batch
+        :param x_meta: batch of sampled data to be used for meta update (i.e. to compute loss after fine-tuning)
+        :param y_meta: ground truth y points associated with x_meta
+        :param task_probability_weights: importance weights to be used in importance sampling regime (None if not being used)
+        """
         for _ in range(self.num_inner_updates):
-            parameters = self.inner_loop_update(parameters, x_batch, y_batch)
+            parameters = self._inner_loop_update(parameters, x_batch, y_batch)
         if task_probability_weights is not None:
             loss_for_meta_update = task_probability_weights * self._compute_loss(parameters, x_meta, y_meta)
         else:
@@ -189,6 +219,12 @@ class MAML(ABC):
         return loss_for_meta_update
 
     def batch_maml_loss(self, parameters, x_batch, y_batch, x_meta, y_meta, task_probability_weights, get_all_losses=False):
+        """
+        Batched version of _maml_loss method.
+
+        :param get_all_losses: whether or not to return list of losses or mean over losses. If using priority queue, 
+                               we require individual task losses.
+        """
         task_losses = vmap(partial(self._maml_loss, parameters))(x_batch, y_batch, x_meta, y_meta, task_probability_weights)
         if get_all_losses:
             return task_losses
@@ -204,11 +240,10 @@ class MAML(ABC):
         :param y_batch: ground truth of batch label values 
         :param x_meta: extra input data sample for meta backprop
         :param y_meta: labels for extra input data
-        :param max_indices: for use with priority sample, gives indices of queue used in task batch
         :param task_probability_weights: weights for individual task losses
 
-        :return updated_optimiser
-        :return meta_loss
+        :return updated_optimiser: new optimiser state
+        :return parameters: parameters after outer loop step
         """
         # get parameters of current state of outer model
         parameters = self.get_params_from_optimiser(optimiser_state)
@@ -277,12 +312,11 @@ class MAML(ABC):
 
     def validate(self, step_count: int, visualise: bool=True) -> None:
         """
-        Performs a validation step for loss during training
+        Performs a validation step for loss during training. Also makes plots for tensorboard.
 
-        :param step_count: number of steps in training undergone (used for pring statement)
+        :param step_count: number of steps in training undergone (used for print statement)
         :param visualise: whether or not to visualise validation run
         """
-        
         validation_losses = []
         validation_figures = []
 
@@ -304,7 +338,7 @@ class MAML(ABC):
             # inner loop update
             for _ in range(self.validation_num_inner_updates):
 
-                network_parameters = self.inner_loop_update(network_parameters, validation_x_batch, validation_y_batch)
+                network_parameters = self._inner_loop_update(network_parameters, validation_x_batch, validation_y_batch)
                 
                 validation_model_iterations.append(copy.deepcopy(network_parameters))
             
@@ -315,15 +349,13 @@ class MAML(ABC):
 
             validation_losses.append(float(test_loss))
 
-            if math.isnan(test_loss):
-                import pdb; pdb.set_trace()
-
             if visualise:
                 save_name = 'validation_step_{}_rep_{}.png'.format(step_count, r)
-                validation_fig = self.visualise(
+                validation_fig = self._visualise(
                     validation_model_iterations, val_task, validation_x_batch, validation_y_batch, save_name=save_name, visualise_all=self.visualise_all
                     )
                 validation_figures.append(validation_fig)
+                self.writer.add_figure("vadliation_plots/repeat_{}".format(r), validation_fig, step_count)
 
         mean_validation_loss = onp.mean(validation_losses)
         var_validation_loss = onp.std(validation_losses)
@@ -332,9 +364,6 @@ class MAML(ABC):
         validation_loss_distribution_fig = self._get_validation_loss_distribution_plot(validation_losses)
         # write validation loss distribution figure to tensorboard
         self.writer.add_figure("validation_loss_distribution", validation_loss_distribution_fig, step_count)
-
-        if math.isnan(mean_validation_loss):
-            import pdb; pdb.set_trace()
 
         print('--- validation loss @ step {}: {}'.format(step_count, mean_validation_loss))
         self.writer.add_scalar('meta_metrics/validation_loss_mean', mean_validation_loss, step_count)
@@ -346,11 +375,6 @@ class MAML(ABC):
             self.writer.add_figure("validation_loss_heatmap", validation_loss_heatmap_fig, step_count)
         else:
             warnings.warn("Visualisation of validation losses with parameter space dimension > 2 not supported", Warning)
-
-        if visualise:
-            # plot qualitative results
-            for f, fig in enumerate(validation_figures):
-                self.writer.add_figure("vadliation_plots/repeat_{}".format(f), fig, step_count)
 
         if self.priority_sample:
             # get figures from priority queue
@@ -366,11 +390,22 @@ class MAML(ABC):
             if priority_queue_loss_dist_fig:
                 self.writer.add_figure("queue_loss_dist", priority_queue_loss_dist_fig, step_count)
 
-    def fast_validate(self):
+    @abstractmethod
+    def _visualise(
+        self, validation_model_iterations: List, val_task, validation_x_batch: np.ndarray, validation_y_batch: np.ndarray, 
+        save_name: str=save_name, visualise_all: bool=self.visualise_all
+        ):
         """
-        jit accelerated validation loop
+        Visualise qualitative run.
+
+        :param validation_model_iterations: parameters of model after successive fine-tuning steps
+        :param val_task: task being evaluated
+        :param validation_x_batch: k data points fed to model for finetuning
+        :param validation_y_batch: ground truth data associated with validation_x_batch
+        :param save_name: name of file to be saved
+        :param visualise_all: whether to visualise all fine-tuning steps or just final 
         """
-        return jit(self.validate)
+        raise NotImplementedError("Base class method")
 
     def _get_validation_tasks(self):
         """produces set of tasks for use in validation"""
@@ -383,7 +418,7 @@ class MAML(ABC):
     def _get_fixed_validation_tasks(self):
         """
         If using fixed validation this method returns a set of tasks that are 
-        'representative' of the task distribution in some meaningful way.
+        equally spread across the task distribution space.
         """
         raise NotImplementedError("Base class method")
 
