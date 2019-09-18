@@ -9,3 +9,41 @@ pip install -r requirements.txt
 To run experiments, run the following command:
 
 source experiment.sh
+
+# Repo
+
+**Summary:**
+
+# Table of Contents
+1. [Installation](#installation)
+2. [Structure of repository](#repository-structure)
+
+## Installation
+
+
+## Repository Structure
+
+```
+│
+├── setup.py          
+│     
+├── tests             
+│
+├── package    
+│    │
+│    │
+│    ├── sub_folder
+│    │   │
+│    │   ├── 
+│    │   ├── 
+│    │   └── 
+│    │
+│    ├── 
+│    ├── 
+│    ├── 
+│    ├── 
+│    ├── 
+│    └── 
+│
+└── 
+```
