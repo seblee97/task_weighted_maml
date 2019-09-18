@@ -68,7 +68,14 @@ To monitor experiments, you can use tensorboard. By default log files are in the
 Sample results when run with seed 0 are shown below. More details can be found in the paper.
 
 ![GitHub Logo](/docs/results1.png)
+
+Loss curves during training of meta sinusoidal regression for the various task sampling regimes. The validation losses (bottom row) are the losses 
+incurred in the inner loop during training. The test losses (top row) are the fine-tuning losses of the meta-parameter on a fixed set of test tasks that
+uniformly span the parameter space. Performance on these test tasks with biased sampling is better than in the vanilla MAML case.
+
 ![GitHub Logo](/docs/results2.png)
+
+Sample regression results at test time. The top row shows a low amplitude task (hard), while the bottom two rows show medium and high amplitude tasks that are much easier. Even when biased towards seeing harder tasks, a task-weighted MAML can still fine-tune well to easy tasks.
 
 ### Repository Structure
 
