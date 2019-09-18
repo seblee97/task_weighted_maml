@@ -5,6 +5,8 @@ import os
 import datetime
 import math
 import warnings
+import numpy as onp
+import matplotlib.pyplot as plt
 
 from tensorboardX import SummaryWriter
 
@@ -12,16 +14,11 @@ from typing import Any, Tuple, List, Dict
 
 from abc import ABC, abstractmethod
 
-import numpy as onp
-import matplotlib.pyplot as plt
-
 from utils.priority import PriorityQueue
 
-import jax.numpy as np
-import matplotlib.pyplot as plt
-import jax
-
 # jax imports
+import jax.numpy as np
+import jax
 from jax import vmap # for auto-vectorizing functions
 from jax import jit # for compiling functions for speedup
 from jax.experimental import stax # neural network library
