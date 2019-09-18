@@ -14,7 +14,9 @@ from abc import ABC, abstractmethod
 import utils.custom_functions
 
 class PriorityQueue(ABC):
-
+    """
+    Base class for the priority queue.
+    """
     def __init__(self, 
                 block_sizes: Dict[str, float], param_ranges: Dict[str, Tuple[float, float]], 
                 sample_type: str, epsilon_start: float, epsilon_final: float, epsilon_decay_rate: float, epsilon_decay_start: int,
@@ -26,10 +28,15 @@ class PriorityQueue(ABC):
         self.param_ranges = param_ranges
         self.sample_type = sample_type
         self.initial_value = initial_value
-        self.epsilon = epsilon_start
-        self.epsilon_final = epsilon_final
-        self.epsilon_decay_start = epsilon_decay_start
-        self.epsilon_decay_rate = epsilon_decay_rate 
+
+        if 'epsilon' in self.sample_type:
+            self.epsilon = epsilon_start
+            self.epsilon_final = epsilon_final
+            self.epsilon_decay_start = epsilon_decay_start
+            self.epsilon_decay_rate = epsilon_decay_rate 
+        else:
+            self.epsilon = None 
+
         self.burn_in = burn_in
         self.save_path = save_path
 
@@ -45,18 +52,23 @@ class PriorityQueue(ABC):
         """
         getter method for epsilon value
         """
-        if 'epsilon' in self.sample_type:
-            return self.epsilon
-        else:
-            return None
+        return self.epsilon
 
     def _initialise_queue(self):
         """
         create a meshgrid of dimension equal to block_sizes (number of parameters specifying task)
-        for each tuple combination of parameters initialise key in queue dictionary.
+        for each tuple combination of parameters, initialise key in queue dictionary either to 
+        constant value or gaussian. 
+        
+        construct analogous grid for tracking counts of sampling of different parameter tuples. 
+        construct analogous grid for tracking first derivative of original grid.
 
         :return parameter_grid: a numpy array of dimension equal to number of parameters specifying task. 
                                 initialised to a vlue specified in init
+        :return counts: a numpy array of dimension equal to number of parameters specifying task with counts
+                        all set to zero (unless using saved version)
+        :return queue_delta: a numpy array of dimension equal to number of parameters specifying task with change in
+                             parameter_grid
         """
         if self.queue_resume:
             # load saved priority queue from previous run
@@ -78,9 +90,10 @@ class PriorityQueue(ABC):
                 queue_delta = np.abs(np.random.normal(0, 30, tuple(pranges)))
 
             counts = np.zeros(tuple(pranges))
+
         return parameter_grid, counts, queue_delta
 
-    def save_queue(self, step_count):
+    def save_queue(self, step_count: int) -> None:
         """
         Save a copy of the priority_queue and queue_counts up to this point in training
 
@@ -93,39 +106,33 @@ class PriorityQueue(ABC):
         np.savez(queue_path, self._queue)
         np.savez(counts_path, self.sample_counts)
   
-    # for checking if the queue is empty 
-    def isEmpty(self):
-        return len(self._queue) == 0
+    def insert(self, key: List, data: float) -> None:
+        """
+        inserts element into queue.
+
+        :param key: index of queue to update
+        :param data: new value 
+        """
+        current_data = self._queue[tuple(key)]
+        data_delta = current_data - data
+        self._queue[tuple(key)] = data
+        self._queue_delta[tuple(key)] = abs(data_delta)
   
-    # for inserting an element in the queue
-    def insert(self, key, data):
-        try:
-            # if self.framework == 'pytorch':
-            #     data = data.cpu().detach().numpy()
-            # in case of queue being a dictionary, 'key' is a key into dict object
-            if type(self._queue) == dict:
-                self._queue[key] = data
-            # in case of queue being a np array, 'key' is a list specifying indices
-            elif type(self._queue) == np.ndarray:
-                current_data = self._queue[tuple(key)]
-                data_delta = current_data - data
-                self._queue[tuple(key)] = data
-                self._queue_delta[tuple(key)] = abs(data_delta)
-        except:
-            import pdb; pdb.set_trace()
-  
-    # for popping an element based on priority heuristic
-    def query(self, step):
+    def query(self, step: int):
         """
         queries priority queue and returns value based on priority heuristic. 
         if max, highest value is returned
         if epsilon_greedy, highest value is return with probability 1-epsilon, else random value is returned
-        if sample_interpolation, a sample is made according to a pdf defined by a continuous interpolation of the param space
+        if interpolate_and_sample_under_pdf, a sample is made according to a pdf defined by a continuous interpolation of the param space
+        if sample_under_pdf, a sample is made according to discrete pdf from counts
+        if sample_delta, a sample is made accordint to discrete pdf from queue delta
+        if importance is added to above, task probabilities are tracked for use in reweighting later
 
         :param step: step count of training
 
         :return indices: indices of priority queue
         :return parameter_values: values of parameters for task (obtained from indices)
+        :return task_probability: probability that the task sampled was to be sampled 
         """
         queue_copy = copy.deepcopy(self._queue)
 
@@ -182,16 +189,13 @@ class PriorityQueue(ABC):
             raise ValueError("No sample_type named {}. Please try either 'max', 'epsilon_greedy', 'sample_under_pdf', or 'interpolate_and_sample_under_pdf'".format(self.sample_type))
 
         # add to sample count of max_indices
-        try:
-            self.sample_counts[tuple(indices)] += 1
-        except:
-            import pdb; pdb.set_trace()
+        self.sample_counts[tuple(indices)] += 1
         
         # convert samples/max indices to parameter values (i.e. scale by parameter ranges)
         parameter_values = [p[0] + i * b + random.uniform(0, b) for (p, i, b) in zip(self.param_ranges, indices, self.block_sizes)]
 
         # anneal epsilon
-        if self.epsilon > self.epsilon_final and step > self.epsilon_decay_start:
+        if self.epsilon and (self.epsilon > self.epsilon_final) and (step > self.epsilon_decay_start):
             self.epsilon -= self.epsilon_decay_rate
 
         assert (self._queue == queue_copy).all(), "Error"

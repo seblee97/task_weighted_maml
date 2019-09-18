@@ -30,7 +30,11 @@ from functools import partial # for use with vmap
 
 
 class MAML(ABC):
+    """
+    Base class for the MAML algorithm.
 
+    Includes training and validation loop methods.
+    """
     def __init__(self, params):
         self.params = params
 
