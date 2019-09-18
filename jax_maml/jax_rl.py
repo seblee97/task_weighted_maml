@@ -14,7 +14,7 @@ from jax.experimental import stax # neural network library
 from jax.experimental import optimizers
 from jax.experimental.stax import Conv, Dense, MaxPool, Relu, Flatten, LogSoftmax
 
-class SineMAML(MAML):
+class RLMAML(MAML):
 
     def __init__(self, params, device):
         self.device = device
@@ -64,7 +64,9 @@ class SineMAML(MAML):
                     )
 
     def _get_model(self):
-
+        """
+        Returns policy network
+        """
         layers = []
 
         # inner / hidden network layers + non-linearities
@@ -73,18 +75,55 @@ class SineMAML(MAML):
             layers.append(Relu)
 
         # output layer (no non-linearity)
-        layers.append(Dense(self.output_dimension))
+        layers.append(Dense(self.output_dsimension))
         
         return stax.serial(*layers)
+
+        raise NotImplementedError
+    def __init__(self, input_size, output_size, hidden_sizes=(),
+                 nonlinearity=F.relu, init_std=1.0, min_std=1e-6):
+        super(NormalMLPPolicy, self).__init__(input_size=input_size, output_size=output_size)
+        self.hidden_sizes = hidden_sizes
+        self.nonlinearity = nonlinearity
+        self.min_log_std = math.log(min_std)
+        self.num_layers = len(hidden_sizes) + 1
+
+        layer_sizes = (input_size,) + hidden_sizes
+        for i in range(1, self.num_layers):
+            self.add_module('layer{0}'.format(i),
+                            nn.Linear(layer_sizes[i - 1], layer_sizes[i]))
+        self.mu = nn.Linear(layer_sizes[-1], output_size)
+
+        self.sigma = nn.Parameter(torch.Tensor(output_size))
+        self.sigma.data.fill_(math.log(init_std))
+        self.apply(weight_init)
+
+    def forward(self, input, params=None):
+
+        if params is None:
+            params = OrderedDict(self.named_parameters())
+
+        output = input
+        for i in range(1, self.num_layers):
+            output = F.linear(output,
+                              weight=params['layer{0}.weight'.format(i)],
+                              bias=params['layer{0}.bias'.format(i)])
+            output = self.nonlinearity(output)
+        mu = F.linear(output, weight=params['mu.weight'],
+                      bias=params['mu.bias'])
+        scale = torch.exp(torch.clamp(params['sigma'], min=self.min_log_std))
+
+        return Normal(loc=mu, scale=scale)
     
     def _get_optimiser(self):
         return optimizers.adam(step_size=self.meta_lr)
 
     def _sample_task(self, batch_size, plot=False, validate=False, step_count=None):
         """
-        returns sin function squashed in x direction by a phase parameter sampled randomly between phase_bounds
-        enlarged in the y direction by an apmplitude parameter sampled randomly between amplitude_bounds
+        returns batch of RL gym environments defined according to the parameters specific to this RL task.
         """
+        raise NotImplementedError
+
         tasks = []
         all_max_indices = [] if self.priority_sample else None
 
@@ -154,47 +193,16 @@ class SineMAML(MAML):
         return modified_sin
 
     def visualise(self, model_iterations, task, validation_x, validation_y, save_name, visualise_all=True):
-
-        # ground truth
-        plot_x = np.linspace(self.domain_bounds[0], self.domain_bounds[1], 100)
-        plot_y_ground_truth = [task(xi) for xi in plot_x]
-
-        fig = plt.figure()
-        plt.plot(plot_x, plot_y_ground_truth, label="Ground Truth")
-
-        final_plot_y_prediction = self.network_forward(model_iterations[-1], plot_x.reshape(len(plot_x), 1))
-        plt.plot(plot_x, final_plot_y_prediction, linestyle='dashed', linewidth=3.0, label='Fine-tuned MAML final update')
-
-        no_tuning_y_prediction = self.network_forward(model_iterations[0], plot_x.reshape(len(plot_x), 1))
-        plt.plot(plot_x, no_tuning_y_prediction, linestyle='dashed', linewidth=3.0, label='Untuned MAML prediction')
-        
-        if visualise_all:
-            for i, (model_iteration) in enumerate(model_iterations[1:-1]):
-
-                plot_y_prediction = self.network_forward(model_iteration, plot_x.reshape(len(plot_x), 1))
-                plt.plot(plot_x, plot_y_prediction, linestyle='dashed') #, label='Fine-tuned MAML {} update'.format(i))
-
-        plt.scatter(validation_x, validation_y, marker='o', label='K Points')
-
-        plt.title("Validation of Sinusoid Meta-Regression")
-        plt.xlabel(r"x")
-        plt.ylabel(r"sin(x)")
-        plt.legend()
-        
-        # fig.savefig(self.params.get("checkpoint_path") + save_name)
-        plt.close()
-
-        return fig
+        """
+        Gif of episode rollout?
+        """
+        raise NotImplementedError
 
     def _generate_batch(self, tasks: List, plot=False): # Change batch generation to be done in pure PyTorch
         """
-        generates an array, x_batch, of B datapoints sampled randomly between domain_bounds
-        and computes the sin of each point in x_batch to produce y_batch.
+        Samples trajectories for set of RL tasks provided. 
         """
-        x_batch = np.stack([np.random.uniform(low=self.domain_bounds[0], high=self.domain_bounds[1], size=(self.inner_update_k, 1)) for _ in range(len(tasks))])
-        y_batch = np.stack([[tasks[t](x) for x in x_batch[t]] for t in range(len(tasks))])
-
-        return x_batch, y_batch
+        raise NotImplementedError
 
     def _get_fixed_validation_tasks(self):
         """

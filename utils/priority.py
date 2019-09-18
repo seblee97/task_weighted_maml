@@ -42,7 +42,10 @@ class PriorityQueue(ABC):
         """
         getter method for epsilon value
         """
-        return self.epsilon
+        if 'epsilon' in self.sample_type:
+            return self.epsilon
+        else:
+            return None
 
     def _initialise_queue(self):
         """

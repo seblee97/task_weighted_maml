@@ -1,6 +1,6 @@
 experiment_name:              vanilla
 resume:
-  model:                      /Users/sebastianlee/Dropbox/Documents/Work/Hack/maml/experiments/results/2019-08-29-15-12-17/vanilla/model_checkpoint_15-12-46_50.npy                  
+  model:                      
 
 priority_sample:              True                      # whether to use a priority queue in sampling the inner loop task
   

@@ -61,7 +61,7 @@ if __name__ == "__main__":
         experiment_device = torch.device("cpu")
 
     task = maml_parameters.get("task_type")
-    if task == 'sin':
+    if 'sin' in task:
         if args.framework == 'pytorch':
             SM = maml.sinusoid.SineMAML(maml_parameters, experiment_device)
         elif args.framework == 'jax':
