@@ -48,6 +48,12 @@ The primary requirements are:
 
 ### Experiments
 
+Individual experiments can be run with the following command:
+
+```python main.py -config *relative path to config choice*```
+
+Config files are in the config folder. 
+
 ### Repository Structure
 
 ```
