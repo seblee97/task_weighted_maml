@@ -7,7 +7,8 @@ cd maml -->
 ## Table of Contents
 1. [Summary](#summary)
 2. [Installation](#installation)
-3. [Repository Structure](#repository-structure)
+3. [Sample Results](#sample-results)
+4. [Repository Structure](#repository-structure)
 
 ### Summary
 
@@ -58,9 +59,16 @@ To run the full suite of experiments, use the following command:
 
 ```source experiment.sh```
 
-Note, currently jax does not support multiple GPU support and by default GPU memory is pre-allocated so running multiple experiments simulataneously will likely not be possible when running in GPU mode depending on the size of your GPU.
+Note, currently jax does not have multiple GPU support and by default GPU memory is pre-allocated so running multiple experiments simulataneously will likely not be possible when running in GPU mode depending on the size of your GPU.
 
 To monitor experiments, you can use tensorboard. By default log files are in the results folder under experiments.
+
+### Sample Results
+
+Sample results when run with seed 0 are shown below. More details can be found in the paper.
+
+![GitHub Logo](/images/logo.png)
+Format: ![Alt Text](url)
 
 ### Repository Structure
 
