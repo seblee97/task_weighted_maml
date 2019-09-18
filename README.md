@@ -52,7 +52,15 @@ Individual experiments can be run with the following command:
 
 ```python main.py -config *relative path to config choice*```
 
-Config files are in the config folder. 
+Config files are in the config folder. Variables for the experiment generally can be changed in the base_config.py file. Variables specific to the sampling regime used can be changed in the specific config files.
+
+To run the full suite of experiments, use the following command:
+
+```source experiment.sh```
+
+Note, currently jax does not support multiple GPU support and by default GPU memory is pre-allocated so running multiple experiments simulataneously will likely not be possible when running in GPU mode depending on the size of your GPU.
+
+To monitor experiments, you can use tensorboard. By default log files are in the results folder under experiments.
 
 ### Repository Structure
 
