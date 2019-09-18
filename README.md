@@ -10,18 +10,40 @@ To run experiments, run the following command:
 
 source experiment.sh
 
-# Repo
+# Task-Weighted MAML Repository
 
-**Summary:**
+## Table of Contents
+1. [Summary](#summary)
+2. [Installation](#installation)
+3. [Structure of repository](#repository-structure)
 
-# Table of Contents
-1. [Installation](#installation)
-2. [Structure of repository](#repository-structure)
+### Summary
 
-## Installation
+This repository contains code for the [model-agnostic meta-learning algorithm](https://arxiv.org/pdf/1703.03400.pdf) (Finn et al.) including investigation
+into modifying the task sampling regime. Rather than sampling uniformly, we can sample according to a probability distribution that we
+construct using a priority queue containing losses previously seen during training. So far the following sampling regimes have been implemented:
 
+* Uniform (vanilla)
+* Epsilon Greedy (max with certain probability, random otherwise)
+* Weighted Sample (sample according to probability distribution given by priority queue)
+* Importance Weighted Sample (same as above but meta update is now weighted by importance weights)
+* Delta Sample (sample according to probability distribution given by change in priority queue - biases sample to parameter space in which progress has been made)
+* Importance Delta Sample (same as above but meta update is now weighted by importance weights)
 
-## Repository Structure
+The priority queue is essentially a mapping between parameter tuples and losses where the parameters are those governing the task distribution (e.g. in sinusoidal regression the parameters are the phase shift and amplitude scaling). Each time a task is sampled in the inner loop, the parameter associated with this task in the priority queue will be updated with the loss incurred.
+
+So far the following tasks have been implemented:
+
+* 2D sinusoidal regression (parameters: phase shift, amplitude)
+* 3D sinusoidal regression (parameters: phase shift, amplitude & frequency scaling)
+
+I hope to add implementations for image classification and control tasks soon. 
+
+### Installation
+
+### Experiments
+
+### Repository Structure
 
 ```
 │
