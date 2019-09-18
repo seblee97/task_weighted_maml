@@ -67,8 +67,8 @@ To monitor experiments, you can use tensorboard. By default log files are in the
 
 Sample results when run with seed 0 are shown below. More details can be found in the paper.
 
-![GitHub Logo](/images/logo.png)
-Format: ![Alt Text](url)
+![GitHub Logo](/docs/results1.png)
+![GitHub Logo](/docs/results2.png)
 
 ### Repository Structure
 
