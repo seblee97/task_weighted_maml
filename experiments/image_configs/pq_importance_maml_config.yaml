@@ -1,0 +1,7 @@
+experiment_name:              pq_importance
+
+priority_sample:              True                                 # whether to use a priority queue in sampling the inner loop task
+
+priority_queue:
+  sample_type:                'importance_sample_under_pdf'        # type of sampling from priority_queue (max, e_greedy, or interpolate)
+  epsilon_decay_start:        0                                    # training step at which to start epsilon annealing
