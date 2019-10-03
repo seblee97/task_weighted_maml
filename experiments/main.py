@@ -6,6 +6,7 @@ import torch
 import yaml
 import time
 import datetime
+import os
 
 parser = argparse.ArgumentParser()
 
@@ -72,6 +73,25 @@ if __name__ == "__main__":
     elif task == 'quadratic':
         QM = maml.quadratic.QuadraticMAML(maml_parameters)
         QM.train()
-    elif task == 'image_classification':
-        IM = maml.image_classification.ClassificationMAML(maml_parameters)
+    elif task == 'omniglot':
+        # perform preprocessing
+        data_path = maml_parameters.get(["omniglot", "data_path"])
+        data_dir = os.listdir(data_path)
+        if "train_data" and "test_data" in data_dir:
+            print("Image data preprocessed. Move onto training...")
+        else:
+            print("Preprocessing images...")
+            utils.data_preprocessing.preprocess_images(
+                image_directory=os.path.join(data_path, data_dir[0]),
+                n_train=maml_parameters.get(["omniglot", "n_train"]),
+                output_shape=maml_parameters.get(["omniglot", "image_output_shape"])
+            )
+            print("Finished preprocessing images. Move onto training...")
+        if args.framework == 'jax':
+            IM = jax_maml.jax_omniglot.OmniglotMAML(maml_parameters, experiment_device)
+        else:
+            raise ValueError("Invalid framework argument. Use 'jax'")
         IM.train()
+    else:
+        raise ValueError("Unknown task")
+        
