@@ -74,7 +74,10 @@ class MAML(ABC):
 
         # initialise jax model
         self.network_initialisation, self.network_forward = self._get_model()
-        input_shape = (-1, self.input_dimension,)
+        input_shape = [-1]
+        for dim in self.input_dimension:
+            input_shape.append(dim)
+        input_shape = tuple(input_shape)
         random_initialisation = random.PRNGKey(0)
 
         # load previously trained model to continue with
@@ -92,8 +95,8 @@ class MAML(ABC):
             output_shape, network_parameters = self.network_initialisation(random_initialisation, input_shape)
 
         # initialise jax optimiser
-        self.optimier_initialisation, self.optimiser_update, self.get_params_from_optimiser = self._get_optimiser()
-        self.optimiser_state = self.optimier_initialisation(network_parameters)
+        self.optimiser_initialisation, self.optimiser_update, self.get_params_from_optimiser = self._get_optimiser()
+        self.optimiser_state = self.optimiser_initialisation(network_parameters)
 
     @abstractmethod
     def _get_model(self):
@@ -397,7 +400,7 @@ class MAML(ABC):
     @abstractmethod
     def _visualise(
         self, validation_model_iterations: List, val_task, validation_x_batch: np.ndarray, validation_y_batch: np.ndarray, 
-        save_name: str=save_name, visualise_all: bool=self.visualise_all
+        save_name: str, visualise_all: bool
         ):
         """
         Visualise qualitative run.
