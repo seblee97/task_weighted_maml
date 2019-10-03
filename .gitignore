@@ -8,3 +8,4 @@ docs/.ipy*
 .ipynb_checkpoints/
 .DS_Store
 maml_pq.egg-info/
+data/
