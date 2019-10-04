@@ -1,6 +1,7 @@
 from .jax_model import MAML
 from utils.priority import PriorityQueue
 
+import os
 import copy
 import math
 import random
@@ -21,11 +22,17 @@ class OmniglotMAML(MAML):
         self.task_type = params.get('task_type')
 
         # extract relevant task-specific parameters
-        self.N = params.get('N')
-        self.k = params.get('k')
+        self.k = params.get('inner_update_k')
         self.n_train = params.get(['omniglot', 'n_train'])
         self.examples_per_class = params.get(['omniglot', 'examples_per_class'])
+        self.image_shape = params.get(['omniglot', 'image_output_shape'])
 
+        # load image data
+        training_data_path = os.path.join(params.get(["omniglot", "data_path"]), "train_data")
+        self.training_data = [[np.load(os.path.join(training_data_path, char, instance)) 
+                               for instance in os.listdir(os.path.join(training_data_path, char))] for 
+                               char in os.listdir(training_data_path)]
+        
         # self.validation_block_sizes = block_sizes
 
         MAML.__init__(self, params)
@@ -42,6 +49,7 @@ class OmniglotMAML(MAML):
             layers.append(BatchNorm())
             layers.append(Relu)
         
+        layers.append(Flatten)
         layers.append(Dense(self.output_dimension))
         layers.append(Softmax)
 
@@ -106,9 +114,10 @@ class OmniglotMAML(MAML):
             # sample a task from task distribution and generate x, y tensors for that task
                 
             # sample randomly (vanilla maml)
-            image_classes_for_task = random.sample(list(range(self.n_train)))
-            task = {image_class: random.sample(list(range(self.examples_per_class))) for image_class in image_classes_for_task}
-                
+            image_class = random.randrange(self.n_train)
+            k_examples = random.sample(list(range(self.examples_per_class)), self.k)
+            
+            task = [image_class, k_examples]
             tasks.append(task)
     
         return tasks, all_max_indices, task_probabilities
@@ -131,7 +140,7 @@ class OmniglotMAML(MAML):
             return amplitude * np.sin(phase + frequency_scaling * x)
         return modified_sin
 
-    def _generate_batch(self, tasks: List): 
+    def _generate_batch(self, tasks: List[Dict]): 
         """
         Obtain batch of training examples from a list of tasks
 
@@ -140,9 +149,15 @@ class OmniglotMAML(MAML):
         :return x_batch: x points sampled from data
         :return y_batch: y points associated with x_batch
         """
-        
-        x_batch = np.stack([np.random.uniform(low=self.domain_bounds[0], high=self.domain_bounds[1], size=(self.inner_update_k, 1)) for _ in range(len(tasks))])
-        y_batch = np.stack([[tasks[t](x) for x in x_batch[t]] for t in range(len(tasks))])
+        unstacked_x_batch = [[self.training_data[task[0]][example] for example in task[1]] for task in tasks]
+        x_batch = np.stack(unstacked_x_batch).reshape(len(unstacked_x_batch) * self.k, self.image_shape[0], self.image_shape[1], 1) #N*k, width, height
+
+        # one hot vectors where 1 corresponds to correct class
+        # unstacked_y_batch = np.zeros((len(unstacked_x_batch), self.n_train))
+        # unstacked_y_batch[range(len(unstacked_x_batch)), [task[0] for task in tasks]] = 1
+        # y_batch = np.stack(unstacked_y_batch)
+
+        y_batch = np.array([task[0] for task in tasks])
 
         return x_batch, y_batch
 
@@ -156,6 +171,7 @@ class OmniglotMAML(MAML):
 
         :return loss: loss on ground truth vs output of network applied to inputs
         """
+        print(inputs.shape)
         predictions = self.network_forward(parameters, inputs)
         loss = np.mean((ground_truth - predictions) ** 2)
         return loss
