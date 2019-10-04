@@ -60,6 +60,7 @@ def downsample_images(image_directory: str, output_shape: Tuple[int], save_as_ar
     for image in images:
         img = np.array(Image.open(image), dtype=float)
         downsampled_image = resize(img, output_shape, anti_aliasing=True)
+        downsampled_image = np.expand_dims(downsampled_image, axis=2)
         if save_as_array:
             np.save(image.split(".")[0], downsampled_image)
             os.remove(image)
@@ -121,8 +122,7 @@ def preprocess_images(image_directory:str, n_train: int, output_shape: Tuple[int
 
     for train_char_path in training_character_paths:
         downsample_images(train_char_path, output_shape=output_shape)
+        rotate_images(train_char_path)
     for test_char_path in test_character_paths:
         downsample_images(test_char_path, output_shape=output_shape)
         rotate_images(test_char_path)
-
-    print()
