@@ -58,14 +58,13 @@ def downsample_images(image_directory: str, output_shape: Tuple[int], save_as_ar
     """
     images = [os.path.join(image_directory, f) for f in os.listdir(image_directory)]
     for image in images:
-        img = np.array(Image.open(image), dtype=float)
-        downsampled_image = resize(img, output_shape, anti_aliasing=True)
-        downsampled_image = np.expand_dims(downsampled_image, axis=2)
+        img = Image.open(image)
+        downsampled_image = 1 - np.array(img.resize(output_shape, resample=Image.LANCZOS), dtype=float)
         if save_as_array:
             np.save(image.split(".")[0], downsampled_image)
             os.remove(image)
         else:
-            downsampled_image = Image.fromarray(np.round(resize(img, output_shape, anti_aliasing=True)))
+            downsampled_image = Image.fromarray(np.round(resize(img, output_shape, resample=Image.LANCZOS)))
             downsampled_image.convert('L').save(image)
 
 def split_test_train(image_directory: str, n_train:int, train_destination:str, test_destination:str):
