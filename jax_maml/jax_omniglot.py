@@ -5,15 +5,19 @@ import os
 import copy
 import math
 import random
-import numpy as np
+import numpy as onp
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 import warnings
+import time
 
 from typing import Any, Dict, List, Tuple
 
 from jax.experimental import stax # neural network library
 from jax.experimental import optimizers
 from jax.experimental.stax import Conv, Dense, MaxPool, Relu, Flatten, LogSoftmax, BatchNorm, Softmax
+
+import jax.numpy as np
 
 class OmniglotMAML(MAML):
 
@@ -26,14 +30,26 @@ class OmniglotMAML(MAML):
         self.n_train = params.get(['omniglot', 'n_train'])
         self.examples_per_class = params.get(['omniglot', 'examples_per_class'])
         self.image_shape = params.get(['omniglot', 'image_output_shape'])
+        self.N = params.get(['omniglot', 'N'])
+        self.batch_size = params.get('task_batch_size')
 
         # load image data
+        print("Loading image dataset...")
+        t0 = time.time()
         training_data_path = os.path.join(params.get(["omniglot", "data_path"]), "train_data")
-        self.training_data = [[np.load(os.path.join(training_data_path, char, instance)) 
+        self.training_data = [[onp.load(os.path.join(training_data_path, char, instance)) 
                                for instance in os.listdir(os.path.join(training_data_path, char))] for 
                                char in os.listdir(training_data_path)]
-        
-        # self.validation_block_sizes = block_sizes
+        test_data_path = os.path.join(params.get(["omniglot", "data_path"]), "test_data")
+        self.test_data = [[onp.load(os.path.join(test_data_path, char, instance)) 
+                               for instance in os.listdir(os.path.join(test_data_path, char))] for 
+                               char in os.listdir(test_data_path)]
+
+        self.data = self.training_data + self.test_data
+        self.total_num_classes = len(self.data)
+        print("Finished loading image dataset ({} seconds).".format(round(time.time() - t0)))
+
+        self.is_classification = True
 
         MAML.__init__(self, params)
 
@@ -45,12 +61,12 @@ class OmniglotMAML(MAML):
 
         # inner / hidden network layers + non-linearities
         for l in self.network_layers:
-            layers.append(Conv(out_chan=l, filter_shape=(3, 3), strides=(2,2)))
+            layers.append(Conv(out_chan=l, filter_shape=(3, 3), padding='SAME', strides=(2,2)))
             layers.append(BatchNorm())
             layers.append(Relu)
         
         layers.append(Flatten)
-        layers.append(Dense(self.output_dimension))
+        layers.append(Dense(self.N))
         layers.append(Softmax)
 
         # make jax stax object
@@ -67,6 +83,7 @@ class OmniglotMAML(MAML):
 
     def _get_priority_queue(self):
         """Initiate priority queue"""
+        raise NotImplementedError
         if self.task_type == 'sin3d':
             param_ranges = self.params.get(["priority_queue", "param_ranges_3d"])
             block_sizes = self.params.get(["priority_queue", "block_sizes_3d"])
@@ -114,31 +131,22 @@ class OmniglotMAML(MAML):
             # sample a task from task distribution and generate x, y tensors for that task
                 
             # sample randomly (vanilla maml)
-            image_class = random.randrange(self.n_train)
-            k_examples = random.sample(list(range(self.examples_per_class)), self.k)
-            
-            task = [image_class, k_examples]
+            if validate:
+                task = [random.randrange(self.n_train, self.total_num_classes) for _ in range(self.N)]
+            else:
+                task = [random.randrange(self.n_train) for _ in range(self.N)]
             tasks.append(task)
     
         return tasks, all_max_indices, task_probabilities
 
     def _get_task_from_params(self, parameters: List) -> Any:
         """
-        Return sine function defined by parameters given
-
-        :param parameters: parameters defining the specific sin task in the distribution
-
-        :return modified_sin: sin function
+        Not needed for Image classification tasks
 
         (method differs from _sample_task in that it is not a random sample but
         defined by parameters given)
         """
-        amplitude = parameters[0]
-        phase = parameters[1]
-        frequency_scaling = parameters[2]
-        def modified_sin(x):
-            return amplitude * np.sin(phase + frequency_scaling * x)
-        return modified_sin
+        raise NotImplementedError
 
     def _generate_batch(self, tasks: List[Dict]): 
         """
@@ -149,16 +157,16 @@ class OmniglotMAML(MAML):
         :return x_batch: x points sampled from data
         :return y_batch: y points associated with x_batch
         """
-        unstacked_x_batch = [[self.training_data[task[0]][example] for example in task[1]] for task in tasks]
-        x_batch = np.stack(unstacked_x_batch).reshape(len(unstacked_x_batch) * self.k, self.image_shape[0], self.image_shape[1], 1) #N*k, width, height
+        unstacked_x_batch = [[[self.data[n][example] for example in random.sample(list(range(self.examples_per_class)), self.k)] for n in task] for task in tasks]
+        x_batch = onp.stack(unstacked_x_batch).reshape(-1, self.N * self.k, self.image_shape[0], self.image_shape[1], 1) # B, N*k, width, height, 1
 
         # one hot vectors where 1 corresponds to correct class
         # unstacked_y_batch = np.zeros((len(unstacked_x_batch), self.n_train))
         # unstacked_y_batch[range(len(unstacked_x_batch)), [task[0] for task in tasks]] = 1
         # y_batch = np.stack(unstacked_y_batch)
 
-        y_batch = np.array([task[0] for task in tasks])
-
+        unstacked_y_batch = [onp.concatenate([[j for _ in range(self.k)] for j in range(self.N)]) for t in range(len(tasks))]
+        y_batch = onp.stack(unstacked_y_batch)
         return x_batch, y_batch
 
     def _compute_loss(self, parameters, inputs, ground_truth):
@@ -171,10 +179,26 @@ class OmniglotMAML(MAML):
 
         :return loss: loss on ground truth vs output of network applied to inputs
         """
-        print(inputs.shape)
         predictions = self.network_forward(parameters, inputs)
-        loss = np.mean((ground_truth - predictions) ** 2)
+        # print(predictions.shape, "ground", ground_truth.shape)
+        losses = [-np.log(predictions[e][ground_truth[e]]) for e in range(len(predictions))]
+        loss = sum(losses) / len(predictions)
         return loss
+
+    def _get_accuracy(self, logits: np.ndarray, ground_truth:np.ndarray, return_plot=False):
+        """
+        Computes accuracy of a batch of predictions.
+
+        :param logits: N x k batch of logits
+        :param ground_truth: (N x k) ground truth indices
+        """
+        predictions = onp.array([int(np.argmax(i)) for i in logits]).reshape((self.N, self.k))
+        accuracy_matrix = predictions == onp.array(ground_truth).reshape(self.N, self.k)
+        accuracy = np.sum(accuracy_matrix) / (onp.prod(accuracy_matrix.shape))
+        if return_plot:
+            return accuracy, accuracy_matrix
+        else:
+            return accuracy
 
     def _visualise(self, model_iterations, task, validation_x, validation_y, save_name, visualise_all=True):
         """
@@ -188,34 +212,47 @@ class OmniglotMAML(MAML):
         :param visualise_all: whether to visualise all fine-tuning steps or just final 
         """
 
-        # ground truth
-        plot_x = np.linspace(self.domain_bounds[0], self.domain_bounds[1], 100)
-        plot_y_ground_truth = [task(xi) for xi in plot_x]
+        if visualise_all:
+            figure_y_dimension = self.N + len(model_iterations)
+        else:
+            figure_y_dimension = self.N + 1
 
-        fig = plt.figure()
-        plt.plot(plot_x, plot_y_ground_truth, label="Ground Truth")
+        fig = plt.figure(figsize=(self.k, figure_y_dimension))
+        fig.suptitle("Input to N-way, k-shot Classification")
 
-        final_plot_y_prediction = self.network_forward(model_iterations[-1], plot_x.reshape(len(plot_x), 1))
-        plt.plot(plot_x, final_plot_y_prediction, linestyle='dashed', linewidth=3.0, label='Fine-tuned MAML final update')
+        grid_spec = gridspec.GridSpec(
+            figure_y_dimension, 
+            self.k, 
+            figure=fig, 
+            height_ratios=[1 for _ in range(self.N)] + [3 for _ in range(figure_y_dimension - self.N)], 
+            width_ratios=[1 for _ in range(self.k)]
+            )
 
-        no_tuning_y_prediction = self.network_forward(model_iterations[0], plot_x.reshape(len(plot_x), 1))
-        plt.plot(plot_x, no_tuning_y_prediction, linestyle='dashed', linewidth=3.0, label='Untuned MAML prediction')
+        nk_validation_x = validation_x.reshape(self.N, self.k, self.image_shape[0], self.image_shape[1])
+        nk_validation_y = validation_y.reshape(self.N, self.k)
         
+        # add input data to figure
+        for i in range(self.N):
+            for j in range(self.k):
+                ax = fig.add_subplot(grid_spec[i, j])
+                ax.imshow(nk_validation_x[i][j])
+                ax.set_title("Class {} out of {}".format(i, self.N), fontdict={'fontsize':5})
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+        final_predictions_array = self.network_forward(model_iterations[-1], validation_x)
+        final_predictions_accuracy, final_accuracy_matrix = self._get_accuracy(logits=final_predictions_array, ground_truth=validation_y, return_plot=True)
+
+        final_prediction_axis = fig.add_subplot(grid_spec[self.N, :])
+        final_prediction_axis.imshow(final_accuracy_matrix, cmap='RdYlGn')
+        final_prediction_axis.set_title("Accuracy: {}".format(final_predictions_accuracy))
+
         if visualise_all:
             for i, (model_iteration) in enumerate(model_iterations[1:-1]):
-
-                plot_y_prediction = self.network_forward(model_iteration, plot_x.reshape(len(plot_x), 1))
-                plt.plot(plot_x, plot_y_prediction, linestyle='dashed') #, label='Fine-tuned MAML {} update'.format(i))
-
-        plt.scatter(validation_x, validation_y, marker='o', label='K Points')
-
-        plt.title("Validation of Sinusoid Meta-Regression")
-        plt.xlabel(r"x")
-        plt.ylabel(r"sin(x)")
-        plt.legend()
-        
-        # fig.savefig(self.params.get("checkpoint_path") + save_name)
-        plt.close()
+                y_prediction_array = self.network_forward(model_iteration, validation_x)
+                y_prediction_accuracy, accuracy_matrix = self._get_accuracy(logits=y_prediction_array, ground_truth=validation_y, return_plot=True)
+                prediction_axis = fig.add_subplot(grid_spec[self.N + 1 + i, :])
+                prediction_axis.imshow(accuracy_matrix, cmap='RdYlGn')
 
         return fig
 
@@ -224,35 +261,7 @@ class OmniglotMAML(MAML):
         If using fixed validation this method returns a set of tasks that are 
         equally spread across the task distribution space.
         """
-        # mesh of equally partitioned state space
-        if self.task_type == 'sin3d':
-            amplitude_spectrum, phase_spectrum, frequency_spectrum = np.mgrid[
-                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.validation_block_sizes[0],
-                self.phase_bounds[0]:self.phase_bounds[1]:self.validation_block_sizes[1],
-                self.frequency_bounds[0]:self.frequency_bounds[1]:self.validation_block_sizes[2]
-                ]
-            parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten(), frequency_spectrum.flatten())).T
-        else:
-            amplitude_spectrum, phase_spectrum = np.mgrid[
-                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.validation_block_sizes[0],
-                self.phase_bounds[0]:self.phase_bounds[1]:self.validation_block_sizes[1]
-                ]
-            parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
-
-        fixed_validation_tasks = []
-
-        def generate_sin(amplitude, phase, frequency=1):
-            def modified_sin(x):
-                return amplitude * np.sin(phase + frequency * x)
-            return modified_sin
-
-        for param_pair in parameter_space_tuples:
-            if self.task_type == 'sin3d':
-                fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1], frequency=param_pair[2]))
-            else:
-                fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
-
-        return parameter_space_tuples, fixed_validation_tasks
+        raise NotImplementedError
 
 class OmniglotPriorityQueue(PriorityQueue):
 
