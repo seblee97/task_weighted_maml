@@ -39,6 +39,8 @@ class SineMAML(MAML):
         block_sizes[1] = block_sizes[1] * (2 * np.pi) / 360
         self.validation_block_sizes = block_sizes
 
+        self.is_classification = False
+
         MAML.__init__(self, params)
 
     def _get_model(self):
