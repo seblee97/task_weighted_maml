@@ -80,6 +80,8 @@ class MAML(ABC):
         input_shape = tuple(input_shape)
         random_initialisation = random.PRNGKey(0)
 
+        self.network_input_shape = input_shape
+
         # load previously trained model to continue with
         if self.params.get(["resume", "model"]):
             model_checkpoint_path = self.params.get(["resume", "model"])
@@ -278,7 +280,7 @@ class MAML(ABC):
         """
         print("Training starting...")
         for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
-            # print("Training Step: {}".format(step_count))
+            print("Training Step: {}".format(step_count))
             if step_count % self.validation_frequency == 0 and step_count != 0:
                 if self.checkpoint_path:
                     current_network_parameters = self.get_params_from_optimiser(self.optimiser_state)
@@ -303,10 +305,11 @@ class MAML(ABC):
             x_train, y_train = self._generate_batch(batch_of_tasks)
             x_meta, y_meta = self._generate_batch(batch_of_tasks)
 
-            self.optimiser_state, parameters = self.fast_outer_training_loop()(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta, task_probability_weights=task_importance_weights)
+            self.optimiser_state, parameters = self.outer_training_loop(step_count, self.optimiser_state, x_train, y_train, x_meta, y_meta, task_probability_weights=task_importance_weights)
             
             # get a validation loss (mostly for logging purposes)
             meta_loss = onp.asarray(self.batch_maml_loss(parameters, x_train, y_train, x_meta, y_meta, task_probability_weights=None, get_all_losses=True))
+            print("loss: ", float(np.mean(meta_loss)))
 
             if self.priority_sample:
                 for t in range(len(meta_loss)):
@@ -326,6 +329,7 @@ class MAML(ABC):
         """
         validation_losses = []
         validation_figures = []
+        validation_accuracies = []
 
         validation_parameter_tuples, validation_tasks = self._get_validation_tasks()
 
@@ -340,6 +344,16 @@ class MAML(ABC):
             # sample a task for validation fine-tuning
             validation_x_batch, validation_y_batch = self._generate_batch(tasks=[val_task])
 
+            # sample a new batch from same validation task for testing fine-tuned model
+            test_x_batch, test_y_batch = self._generate_batch(tasks=[val_task])
+            
+            if len(validation_x_batch.shape) != len(self.network_input_shape):
+                # if there is an additional batch dimension for training, squeeze
+                validation_x_batch = np.squeeze(validation_x_batch, axis=0)
+                validation_y_batch = np.squeeze(validation_y_batch, axis=0)
+                test_x_batch = np.squeeze(test_x_batch, axis=0)
+                test_y_batch = np.squeeze(test_y_batch, axis=0)
+
             validation_model_iterations.append(copy.deepcopy(network_parameters))
 
             # inner loop update
@@ -348,11 +362,11 @@ class MAML(ABC):
                 network_parameters = self._inner_loop_update(network_parameters, validation_x_batch, validation_y_batch)
                 
                 validation_model_iterations.append(copy.deepcopy(network_parameters))
-            
-            # sample a new batch from same validation task for testing fine-tuned model
-            test_x_batch, test_y_batch = self._generate_batch(tasks=[val_task])
 
             test_loss = self._compute_loss(network_parameters, test_x_batch, test_y_batch)
+            if self.is_classification:
+                test_accuracy = self._get_accuracy(self.network_forward(network_parameters, validation_x_batch), validation_y_batch)
+                validation_accuracies.append(test_accuracy)
 
             validation_losses.append(float(test_loss))
 
@@ -366,6 +380,7 @@ class MAML(ABC):
 
         mean_validation_loss = onp.mean(validation_losses)
         var_validation_loss = onp.std(validation_losses)
+        mean_validation_accuracies = onp.mean(validation_accuracies)
         
         # get validation loss distribution
         validation_loss_distribution_fig = self._get_validation_loss_distribution_plot(validation_losses)
@@ -375,6 +390,9 @@ class MAML(ABC):
         print('--- validation loss @ step {}: {}'.format(step_count, mean_validation_loss))
         self.writer.add_scalar('meta_metrics/validation_loss_mean', mean_validation_loss, step_count)
         self.writer.add_scalar('meta_metrics/validation_loss_std', var_validation_loss, step_count)
+        if self.is_classification:
+            print('--- validation accuracy @ step {}: {}'.format(step_count, mean_validation_accuracies))
+            self.writer.add_scalar('meta_metrics/validation_accuracy_mean', mean_validation_accuracies, step_count)
 
         # get validation loss heatmap as function of parameters governing validation task
         if self.fixed_validation and len(validation_parameter_tuples[0]) == 2:
