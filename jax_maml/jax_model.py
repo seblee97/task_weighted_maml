@@ -209,6 +209,16 @@ class MAML(ABC):
         """
         gradients = jax.grad(self._compute_loss)(parameters, x_batch, y_batch)
         inner_sgd_fn = lambda g, state: (state - self.inner_update_lr * g)
+        
+        # updated_inner_parameters = []
+        # for layer in range(len(parameters)):
+        #     if len(parameters[layer]) == 0:
+        #         updated_inner_parameters.append(()) 
+        #     elif len(parameters[layer]) == 2:
+        #         updated_layer_weights = inner_sgd_fn(gradients[layer][0], parameters[layer][0])
+        #         updated_layer_biases = inner_sgd_fn(gradients[layer][1], parameters[layer][1])
+        #         updated_inner_parameters.append((updated_layer_weights, updated_layer_biases))
+        
         updated_inner_parameters = jax.tree_util.tree_multimap(inner_sgd_fn, gradients, parameters)
 
         return updated_inner_parameters
