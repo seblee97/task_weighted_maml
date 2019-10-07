@@ -75,14 +75,19 @@ class MAML(ABC):
         # initialise jax model
         self.network_initialisation, self.network_forward = self._get_model()
         input_shape = [-1]
-        for dim in self.input_dimension:
-            input_shape.append(dim)
+        if type(self.input_dimension) == list:
+            for dim in self.input_dimension:
+                input_shape.append(dim)
+        elif type(self.input_dimension) == int:
+            input_shape.append(self.input_dimension)
+        else:
+            raise ValueError("Incorrect type for input dimension. Use list or int")
         input_shape = tuple(input_shape)
-        random_initialisation = random.PRNGKey(0)
+        random_initialisation = jax.random.PRNGKey(0)
 
         self.network_input_shape = input_shape
 
-        # load previously trained model to continue with
+        # load previously trained model to continue with    
         if self.params.get(["resume", "model"]):
             model_checkpoint_path = self.params.get(["resume", "model"])
             try:
