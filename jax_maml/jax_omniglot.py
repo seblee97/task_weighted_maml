@@ -32,6 +32,7 @@ class OmniglotMAML(MAML):
         self.image_shape = params.get(['omniglot', 'image_output_shape'])
         self.N = params.get(['omniglot', 'N'])
         self.batch_size = params.get('task_batch_size')
+        self.one_hot_ground_truth = params.get(['omniglot', 'one_hot_ground_truth'])
 
         # load image data
         print("Loading image dataset...")
@@ -165,8 +166,18 @@ class OmniglotMAML(MAML):
         # unstacked_y_batch[range(len(unstacked_x_batch)), [task[0] for task in tasks]] = 1
         # y_batch = np.stack(unstacked_y_batch)
 
-        unstacked_y_batch = [onp.concatenate([[j for _ in range(self.k)] for j in range(self.N)]) for t in range(len(tasks))]
+        if self.one_hot_ground_truth:
+            unstacked_y_batch = []
+            for t in range(len(tasks)):
+                batch_y_entry = onp.zeros((self.k * self.N, self.N))
+                ground_truth_indices = onp.concatenate([[j for _ in range(self.k)] for j in range(self.N)])
+                batch_y_entry[range(self.k * self.N), ground_truth_indices] = 1
+                unstacked_y_batch.append(batch_y_entry)
+        else:
+            unstacked_y_batch = [onp.concatenate([[j for _ in range(self.k)] for j in range(self.N)]) for t in range(len(tasks))]
+        
         y_batch = onp.stack(unstacked_y_batch)
+        
         return x_batch, y_batch
 
     def _compute_loss(self, parameters, inputs, ground_truth):
@@ -181,8 +192,12 @@ class OmniglotMAML(MAML):
         """
         predictions = self.network_forward(parameters, inputs)
         # print(predictions.shape, "ground", ground_truth.shape)
-        losses = [-np.log(predictions[e][ground_truth[e]]) for e in range(len(predictions))]
-        loss = sum(losses) / len(predictions)
+
+        if self.one_hot_ground_truth:
+            loss = np.mean(-np.log(np.multiply(predictions, ground_truth)))
+        else:
+            losses = [-np.log(predictions[e][ground_truth[e]]) for e in range(len(predictions))]
+            loss = sum(losses) / len(predictions)
         return loss
 
     def _get_accuracy(self, logits: np.ndarray, ground_truth:np.ndarray, return_plot=False):
@@ -244,7 +259,7 @@ class OmniglotMAML(MAML):
         final_predictions_accuracy, final_accuracy_matrix = self._get_accuracy(logits=final_predictions_array, ground_truth=validation_y, return_plot=True)
 
         final_prediction_axis = fig.add_subplot(grid_spec[self.N, :])
-        final_prediction_axis.imshow(final_accuracy_matrix, cmap='RdYlGn')
+        final_prediction_axis.imshow(final_accuracy_matrix, cmap='RdYlGn', vmin=0, vmax=1)
         final_prediction_axis.set_title("Accuracy: {}".format(final_predictions_accuracy))
 
         if visualise_all:
@@ -252,7 +267,7 @@ class OmniglotMAML(MAML):
                 y_prediction_array = self.network_forward(model_iteration, validation_x)
                 y_prediction_accuracy, accuracy_matrix = self._get_accuracy(logits=y_prediction_array, ground_truth=validation_y, return_plot=True)
                 prediction_axis = fig.add_subplot(grid_spec[self.N + 1 + i, :])
-                prediction_axis.imshow(accuracy_matrix, cmap='RdYlGn')
+                prediction_axis.imshow(accuracy_matrix, cmap='RdYlGn', vmin=0, vmax=1)
 
         return fig
 
