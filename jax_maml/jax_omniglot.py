@@ -84,14 +84,9 @@ class OmniglotMAML(MAML):
 
     def _get_priority_queue(self):
         """Initiate priority queue"""
-        raise NotImplementedError
-        if self.task_type == 'sin3d':
-            param_ranges = self.params.get(["priority_queue", "param_ranges_3d"])
-            block_sizes = self.params.get(["priority_queue", "block_sizes_3d"])
-        elif self.task_type == 'sin2d':
-            param_ranges = self.params.get(["priority_queue", "param_ranges_2d"])
-            block_sizes = self.params.get(["priority_queue", "block_sizes_2d"])
-        return  SinePriorityQueue(
+        param_ranges = self.params.get(["priority_queue", "param_ranges"])
+        block_sizes = self.params.get(["priority_queue", "block_sizes"])
+        return  OmniglotPriorityQueue(
                     queue_resume=self.params.get(["resume", "priority_queue"]),
                     counts_resume=self.params.get(["resume", "queue_counts"]),
                     sample_type=self.params.get(["priority_queue", "sample_type"]),
@@ -103,7 +98,8 @@ class OmniglotMAML(MAML):
                     epsilon_decay_start=self.params.get(["priority_queue", "epsilon_decay_start"]),
                     epsilon_decay_rate=self.params.get(["priority_queue", "epsilon_decay_rate"]),
                     burn_in=self.params.get(["priority_queue", "burn_in"]),
-                    save_path=self.checkpoint_path
+                    save_path=self.checkpoint_path,
+                    scale_parameters=self.params.get(["priority_queue", "scale_parameters"])
                     )
 
     def _sample_task(self, batch_size, validate=False, step_count=None):
@@ -130,13 +126,49 @@ class OmniglotMAML(MAML):
         for _ in range(batch_size):
 
             # sample a task from task distribution and generate x, y tensors for that task
-                
-            # sample randomly (vanilla maml)
-            if validate:
-                task = [random.randrange(self.n_train, self.total_num_classes) for _ in range(self.N)]
+            if self.priority_sample and not validate:
+
+                task_max_indices, task, all_task_probabilities = [], [], []
+    
+                # query queue for next task parameters
+                query_count = 0
+                while query_count < self.N:
+                    max_indices, task_parameters, task_probability = self.priority_queue.query(step=step_count)
+                    if task_parameters in task:
+                        pass 
+                    else:
+                        task_max_indices.append(max_indices[0])
+                        task.append(task_parameters[0])
+                        all_task_probabilities.append(task_probability)
+                        query_count += 1
+
+                all_max_indices.append(task_max_indices)
+                task_probabilities.append(onp.prod(all_task_probabilities))
+
+                # get epsilon value
+                epsilon = self.priority_queue.get_epsilon()
+
+                # compute metrics for tb logging
+                queue_count_loss_correlation = self.priority_queue.compute_count_loss_correlation()
+                queue_mean = onp.mean(self.priority_queue.get_queue())
+                queue_std = onp.std(self.priority_queue.get_queue())
+
+                # write to tensorboard
+                if epsilon:
+                    self.writer.add_scalar('queue_metrics/epsilon', epsilon, step_count)
+                self.writer.add_scalar('queue_metrics/queue_correlation', queue_count_loss_correlation, step_count)
+                self.writer.add_scalar('queue_metrics/queue_mean', queue_mean, step_count)
+                self.writer.add_scalar('queue_metrics/queue_std', queue_std, step_count)
+
             else:
-                task = [random.randrange(self.n_train) for _ in range(self.N)]
+                # sample randomly (vanilla maml)
+                if validate:
+                    task = [random.randrange(self.n_train, self.total_num_classes) for _ in range(self.N)]
+                else:
+                    task = [random.randrange(self.n_train) for _ in range(self.N)]
+            
             tasks.append(task)
+        # import pdb; pdb.set_trace()
     
         return tasks, all_max_indices, task_probabilities
 
@@ -283,64 +315,55 @@ class OmniglotPriorityQueue(PriorityQueue):
     def __init__(self, 
                 block_sizes: Dict[str, float], param_ranges: List[Tuple[float, float]], 
                 sample_type: str, epsilon_start: float, epsilon_final: float, epsilon_decay_rate: float, epsilon_decay_start: int,
-                queue_resume: str, counts_resume: str, save_path: str, burn_in: int=None, initial_value: float=None
+                queue_resume: str, counts_resume: str, save_path: str, burn_in: int=None, initial_value: float=None, scale_parameters: bool=False
                 ):
-
-        # convert phase bounds/ phase block_size from degrees to radians
-        phase_ranges = [
-            param_ranges[1][0] * (2 * np.pi) / 360, param_ranges[1][1] * (2 * np.pi) / 360
-            ]
-        phase_block_size = block_sizes[1] * (2 * np.pi) / 360
-
-        param_ranges[1] = phase_ranges
-        block_sizes[1] = phase_block_size
         
         super().__init__(
             block_sizes=block_sizes, param_ranges=param_ranges, sample_type=sample_type, epsilon_start=epsilon_start,
             epsilon_final=epsilon_final, epsilon_decay_rate=epsilon_decay_rate, epsilon_decay_start=epsilon_decay_start, queue_resume=queue_resume,
-            counts_resume=counts_resume, save_path=save_path, burn_in=burn_in, initial_value=initial_value
+            counts_resume=counts_resume, save_path=save_path, burn_in=burn_in, initial_value=initial_value, scale_parameters=scale_parameters
         )
-
-        self.figure_locsx, self.figure_locsy, self.figure_labelsx, self.figure_labelsy = self._get_figure_labels()
-
-    def _get_figure_labels(self):
-        xlocs = np.arange(0, self._queue.shape[1])
-        ylocs = np.arange(0, self._queue.shape[0])
-        xlabels = np.arange(self.param_ranges[1][0], self.param_ranges[1][1], self.block_sizes[1])
-        ylabels = np.arange(self.param_ranges[0][0], self.param_ranges[0][1], self.block_sizes[0])
-        return xlocs, ylocs, xlabels, ylabels
 
     def visualise_priority_queue(self, feature='losses'):
         """
         Produces plot of priority queue (losses or counts) 
 
         Discrete vs continuous, 2d heatmap vs 3d.
-
+    
         :param feature: which aspect of queue to visualise. 'losses' or 'counts'
         :retrun fig: matplotlib figure showing heatmap of priority queue feature
         """
-        if type(self._queue) == np.ndarray:
-            if len(self._queue.shape) == 2:
-                fig = plt.figure()
+        def closestDivisors(N):
+            """Finds two highest factors that are closest to each other"""
+            first_approx = round(onp.sqrt(N))
+            while N % first_approx > 0:
+                first_approx -= 1
+            return (int(first_approx), int(N / first_approx))
+
+        import pdb; pdb.set_trace()
+        if type(self._queue) == onp.ndarray:
+            if len(self._queue.shape) <= 2:
+
                 if feature == 'losses':
-                    plt.imshow(self._queue)
+                    plot_queue = copy.deepcopy(self._queue)
                 elif feature == 'counts':
-                    plt.imshow(self.sample_counts)
+                    plot_queue = copy.deepcopy(sample_counts)
                 else:
                     raise ValueError("feature type not recognised. Use 'losses' or 'counts'")
-                plt.colorbar()
-                plt.xlabel("Phase")
-                plt.ylabel("Amplitude")
 
-                # set labels to sine specific parameter ranges
-                # plt.xticks(
-                #     locs=self.figure_locsx, 
-                #     labels=self.figure_labelsx
-                #     )
-                # plt.yticks(
-                #     locs=self.figure_locsy, 
-                #     labels=self.figure_labelsy
-                #     )
+                if len(self._queue.shape) == 1:
+                    plot_queue = plot_queue.reshape((len(plot_queue), 1))
+
+                # re-order queue to sorted by loss (makes visual more interpretable)
+                plot_queue = plot_queue[onp.argsort(self._queue)]
+
+                # reshape queue to something visually tractable
+                plot_queue = plot_queue.reshape(closestDivisors(len(plot_queue)))
+
+                fig = plt.figure()
+                plt.imshow(plot_queue)                
+                plt.colorbar()
+                plt.xlabel("Image Index")
 
                 return fig
             else:
@@ -355,7 +378,7 @@ class OmniglotPriorityQueue(PriorityQueue):
         """
         all_losses = self._queue.flatten()
 
-        hist, bin_edges = np.histogram(all_losses, bins=int(0.1 * len(all_losses)))
+        hist, bin_edges = onp.histogram(all_losses, bins=int(0.1 * len(all_losses)))
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
         fig = plt.figure()
