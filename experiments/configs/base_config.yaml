@@ -55,3 +55,4 @@ priority_queue:
   param_ranges_3d:            [[0.1, 5], [0, 180], [0.5, 2]]   # range of parameters over whih priority queue is sampled
   burn_in:                                                     # if using argmax without epsilon greedy, need a burn-in to 'fill' priority queue buffer
   initial_value:                                               # value to initialise priority queue elements to  
+  scale_parameters:           True                             # whether to scale the parameters after query to some domain specific ranges
