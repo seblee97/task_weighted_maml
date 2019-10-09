@@ -296,6 +296,7 @@ class MAML(ABC):
         print("Training starting...")
         for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
             print("Training Step: {}".format(step_count))
+            t0 = time.time()
             if step_count % self.validation_frequency == 0 and step_count != 0:
                 if self.checkpoint_path:
                     current_network_parameters = self.get_params_from_optimiser(self.optimiser_state)
@@ -328,11 +329,16 @@ class MAML(ABC):
 
             if self.priority_sample:
                 for t in range(len(meta_loss)):
-                    self.priority_queue.insert(key=max_indices[t], data=meta_loss[t])
+                    if self.is_classification:
+                        for ti in range(len(max_indices[t])):
+                           self.priority_queue.insert(key=[max_indices[t][ti]], data=meta_loss[t])
+                    else:
+                        self.priority_queue.insert(key=max_indices[t], data=meta_loss[t])
 
             self.writer.add_scalar('meta_metrics/meta_update_loss_mean', float(np.mean(meta_loss)), step_count)
             self.writer.add_scalar('meta_metrics/meta_update_loss_std', float(np.std(meta_loss)), step_count)
 
+            print("Time taken for one step: {}".format(time.time() - t0))
         net_params = self.get_params_from_optimiser(self.optimiser_state)
 
     def validate(self, step_count: int, visualise: bool=True) -> None:
