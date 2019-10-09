@@ -20,7 +20,7 @@ class PriorityQueue(ABC):
     def __init__(self, 
                 block_sizes: Dict[str, float], param_ranges: Dict[str, Tuple[float, float]], 
                 sample_type: str, epsilon_start: float, epsilon_final: float, epsilon_decay_rate: float, epsilon_decay_start: int,
-                queue_resume: str, counts_resume: str, save_path: str, burn_in: int=None, initial_value: float=None
+                queue_resume: str, counts_resume: str, save_path: str, burn_in: int=None, initial_value: float=None, scale_parameters: bool=True
                 ):
         self.queue_resume = queue_resume
         self.counts_resume = counts_resume
@@ -28,6 +28,7 @@ class PriorityQueue(ABC):
         self.param_ranges = param_ranges
         self.sample_type = sample_type
         self.initial_value = initial_value
+        self.scale_parameters = scale_parameters
 
         if 'epsilon' in self.sample_type:
             self.epsilon = epsilon_start
@@ -192,13 +193,16 @@ class PriorityQueue(ABC):
         self.sample_counts[tuple(indices)] += 1
         
         # convert samples/max indices to parameter values (i.e. scale by parameter ranges)
-        parameter_values = [p[0] + i * b + random.uniform(0, b) for (p, i, b) in zip(self.param_ranges, indices, self.block_sizes)]
+        if self.scale_parameters:
+            parameter_values = [p[0] + i * b + random.uniform(0, b) for (p, i, b) in zip(self.param_ranges, indices, self.block_sizes)]
+        else:
+            parameter_values = indices
 
         # anneal epsilon
         if self.epsilon and (self.epsilon > self.epsilon_final) and (step > self.epsilon_decay_start):
             self.epsilon -= self.epsilon_decay_rate
 
-        assert (self._queue == queue_copy).all(), "Error"
+        assert (self._queue == queue_copy).all(), "Error. Queue should not change under query method."
 
         return indices, parameter_values, task_probability
 
