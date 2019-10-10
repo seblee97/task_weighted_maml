@@ -13,6 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-base_config', type=str, help='path to base configuration file for maml experiment', default='configs/base_config.yaml')
 parser.add_argument('-config', type=str, help='path to specific configuration file for maml experiment')
 parser.add_argument('-framework', type=str, help='jax or pytorch model', default='pytorch')
+parser.add_argument('-gpu_id', type=int, help='id of gpu to use if more than 1 available', default=0)
 
 args = parser.parse_args()
 
@@ -55,7 +56,7 @@ if __name__ == "__main__":
     if torch.cuda.is_available() and maml_parameters.get('use_gpu'):
         print("Using the GPU")
         maml_parameters.set_property("device", "cuda")
-        experiment_device = torch.device("gpu")
+        experiment_device = torch.device("cuda:{}".format(args.gpu_id))
     else:
         print("Using the CPU")
         maml_parameters.set_property("device", "cpu")
