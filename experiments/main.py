@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-base_config', type=str, help='path to base configuration file for maml experiment', default='configs/base_config.yaml')
 parser.add_argument('-config', type=str, help='path to specific configuration file for maml experiment')
-parser.add_argument('-framework', type=str, help='jax or pytorch model', default='jax')
+parser.add_argument('-framework', type=str, help='jax or pytorch model', default='pytorch')
 
 args = parser.parse_args()
 
