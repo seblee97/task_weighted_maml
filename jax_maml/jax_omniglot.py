@@ -123,6 +123,9 @@ class OmniglotMAML(MAML):
         task_probabilities = []
         all_max_indices = [] if self.priority_sample else None
 
+        # if step_count == 1:
+        #     import pdb; pdb.set_trace()
+
         for _ in range(batch_size):
 
             # sample a task from task distribution and generate x, y tensors for that task
@@ -134,7 +137,7 @@ class OmniglotMAML(MAML):
                 query_count = 0
                 while query_count < self.N:
                     max_indices, task_parameters, task_probability = self.priority_queue.query(step=step_count)
-                    if task_parameters in task:
+                    if task_parameters[0] in task:
                         pass 
                     else:
                         task_max_indices.append(max_indices[0])
