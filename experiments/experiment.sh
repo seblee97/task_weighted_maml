@@ -16,12 +16,14 @@ tmux send-keys -t "standard_maml_exp" "source ~/envs/meta/bin/activate" C-m
 tmux send-keys -t "pq_epsilon_maml_exp" "source ~/envs/meta/bin/activate" C-m
 tmux send-keys -t "pq_sample_maml_exp" "source ~/envs/meta/bin/activate" C-m
 tmux send-keys -t "pq_importance_maml_exp" "source ~/envs/meta/bin/activate" C-m
+tmux send-keys -t "pq_sample_delta" "source ~/envs/meta/bin/activate" C-m
 
 # send keys to run experiments
-tmux send-keys -t "standard_maml_exp" "python main.py -config configs/maml_config.yaml" C-m
-tmux send-keys -t "pq_epsilon_maml_exp" "python main.py -config configs/pq_maml_config.yaml" C-m
-tmux send-keys -t "pq_sample_maml_exp" "python main.py -config configs/pq_sample_maml_config.yaml" C-m
-tmux send-keys -t "pq_importance_maml_exp" "python main.py -config configs/pq_importance_maml_config.yaml" C-m
+tmux send-keys -t "standard_maml_exp" "python main.py -config configs/maml_config.yaml -gpu_id 0" C-m
+tmux send-keys -t "pq_epsilon_maml_exp" "python main.py -config configs/pq_maml_config.yaml -gpu_id 0" C-m
+tmux send-keys -t "pq_sample_maml_exp" "python main.py -config configs/pq_sample_maml_config.yaml -gpu_id 1" C-m
+tmux send-keys -t "pq_importance_maml_exp" "python main.py -config configs/pq_importance_maml_config.yaml -gpu_id 1" C-m
+tmux send-keys -t "pq_sample_delta" "python main.py -config configs/pq_sample_delta.yaml -gpu_id 1" C-m
 
 # start tmux session for tensorboard, launch tensorboard
 tmux new -s tensorboard -d
