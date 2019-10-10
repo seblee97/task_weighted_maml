@@ -84,6 +84,11 @@ class MAML(ABC):
         self.validation_task_batch_size = self.params.get("validation_task_batch_size")
         self.fixed_validation = self.params.get("fixed_validation")
         self.priority_sample = self.params.get("priority_sample")
+        self.input_dimension = self.params.get("input_dimension")
+        self.framework = self.params.get("framework")
+        self.network_layers = self.params.get("network_layers")
+        self.output_dimension = self.params.get("output_dimension")
+        self.sample_type = self.params.get(["priority_queue", "sample_type"])
 
         # initialise tensorboard writer
         self.writer = SummaryWriter(self.checkpoint_path)
@@ -183,10 +188,19 @@ class MAML(ABC):
         # initialise cumulative gradient to be used in meta update step
         meta_update_gradient = [0 for _ in range(len(weight_copies) + len(bias_copies))]
 
+        meta_loss = []
+        task_importance_weights = []
+
         for _ in range(self.task_batch_size):
-            task_meta_gradient = self.inner_training_loop(step_count, weight_copies, bias_copies)  
+            task_meta_gradient, task_loss, importance_weight = self.inner_training_loop(step_count, weight_copies, bias_copies)
+            meta_loss.append(task_loss) 
+            task_importance_weights.append(importance_weight)
             for i in range(len(weight_copies) + len(bias_copies)):
-                meta_update_gradient[i] += task_meta_gradient[i].detach()
+                meta_update_gradient[i] += importance_weight * task_meta_gradient[i].detach()
+
+        self.writer.add_scalar('meta_metrics/meta_update_loss_mean', np.mean(meta_loss), step_count)
+        self.writer.add_scalar('meta_metrics/meta_update_loss_std', np.std(meta_loss), step_count)
+        self.writer.add_scalar('queue_metrics/importance_weights_mean', np.mean(task_importance_weights), step_count)
 
         # meta update
         # zero previously collected gradients
@@ -218,7 +232,7 @@ class MAML(ABC):
         # sample a task from task distribution and generate x, y tensors for that task
         if self.priority_sample:
             # query queue for next task parameters
-            max_indices, task_parameters = self.priority_queue.query(step=step_count)
+            max_indices, task_parameters, task_probability = self.priority_queue.query(step=step_count)
 
             # get epsilon value
             epsilon = self.priority_queue.get_epsilon()
@@ -232,7 +246,8 @@ class MAML(ABC):
             queue_std = np.std(self.priority_queue.get_queue())
 
             # write to tensorboard
-            self.writer.add_scalar('queue_metrics/epsilon', epsilon, step_count)
+            if epsilon:
+                self.writer.add_scalar('queue_metrics/epsilon', epsilon, step_count)
             self.writer.add_scalar('queue_metrics/queue_correlation', queue_count_loss_correlation, step_count)
             self.writer.add_scalar('queue_metrics/queue_mean', queue_mean, step_count)
             self.writer.add_scalar('queue_metrics/queue_std', queue_std, step_count)
@@ -276,14 +291,25 @@ class MAML(ABC):
         # compute gradients wrt outer model (meta network)
         meta_update_grad = torch.autograd.grad(meta_update_loss, self.model_outer.weights + self.model_outer.biases)
 
-        return meta_update_grad
+        individual_loss = float(meta_update_loss)
+
+        if 'importance' in self.sample_type:
+            standard_task_probability = 1. / np.prod(self.priority_queue.get_queue().shape)
+            importance_weight = standard_task_probability / task_probability
+        else:
+            importance_weight = 1.
+
+        return meta_update_grad, individual_loss, importance_weight
 
     def train(self) -> None:
         """
         Training orchestration method, calls outer loop and validation methods
         """
+        print("Training starting...")
         for step_count in range(self.start_iteration, self.start_iteration + self.training_iterations):
-            if step_count % self.validation_frequency == 0:# and step_count != 0:
+            print("Training Step: {}".format(step_count))
+            t0 = time.time()
+            if step_count % self.validation_frequency == 0 and step_count != 0:
                 if self.checkpoint_path:
                     self.checkpoint_model(step_count=step_count)
                     if self.priority_sample:
@@ -293,9 +319,8 @@ class MAML(ABC):
                 else:
                     vis = False
                 self.validate(step_count=step_count, visualise=vis)
-            # t0 = time.time()
             self.outer_training_loop(step_count)
-            # print(time.time() - t0)
+            print("Time taken for one step: {}".format(time.time() - t0))
 
     def validate(self, step_count: int, visualise: bool=True) -> None:
         """
@@ -317,7 +342,6 @@ class MAML(ABC):
 
             # make copies of outer network for use in validation
             validation_network = copy.deepcopy(self.model_outer).to(self.device)
-            validation_optimiser = optim.Adam(validation_network.weights + validation_network.biases, lr=self.inner_update_lr)
 
             # sample a task for validation fine-tuning
             validation_x_batch, validation_y_batch = self._generate_batch(task=val_task, batch_size=self.validation_k)
@@ -334,19 +358,14 @@ class MAML(ABC):
                 validation_loss = self._compute_loss(validation_prediction, validation_y_batch)
 
                 # find gradients of validation loss wrt inner model weights
-                validation_update_grad = torch.autograd.grad(validation_loss, validation_network.weights + validation_network.biases)
-
-                # zero gradients of validation optimiser
-                validation_optimiser.zero_grad()
+                network_trainable_parameters = [w for w in validation_network.weights] + [b for b in validation_network.biases]
+                validation_update_grad = torch.autograd.grad(validation_loss, network_trainable_parameters, create_graph=True, retain_graph=True)
 
                 # update inner model gradients 
                 for i in range(len(validation_network.weights)):
-                    validation_network.weights[i].grad = validation_update_grad[i].detach()
+                    validation_network.weights[i] = validation_network.weights[i] - self.inner_update_lr * validation_update_grad[i]
                 for j in range(len(validation_network.biases)):
-                    validation_network.biases[j].grad = validation_update_grad[i + j + 1].detach()
-
-                # make step in validation optimiser
-                validation_optimiser.step()
+                    validation_network.biases[j] = validation_network.biases[j] - self.inner_update_lr * validation_update_grad[i + j + 1]
 
                 current_weights = [w.clone() for w in validation_network.weights]
                 current_biases = [b.clone() for b in validation_network.biases]
