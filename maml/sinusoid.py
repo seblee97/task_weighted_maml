@@ -18,31 +18,47 @@ class SineMAML(MAML):
 
     def __init__(self, params, device):
         self.device = device
+        self.task_type = params.get('task_type')
 
         # extract relevant task-specific parameters
-        self.amplitude_bounds = params.get(['sin', 'amplitude_bounds'])
-        self.domain_bounds = params.get(['sin', 'domain_bounds'])
-        degree_phase_bounds = params.get(['sin', 'phase_bounds']) # phase given in degrees
-        block_sizes = params.get(['sin', 'fixed_val_blocks']) 
+        self.amplitude_bounds = params.get(['sin2d', 'amplitude_bounds'])
+        self.domain_bounds = params.get(['sin2d', 'domain_bounds'])
+        degree_phase_bounds = params.get(['sin2d', 'phase_bounds']) # phase given in degrees
+        
+        if self.task_type == 'sin3d':
+            self.frequency_bounds = params.get(['sin3d', 'frequency_bounds'])
+            block_sizes = params.get(['sin3d', 'fixed_val_blocks']) 
+        else:
+            block_sizes = params.get(['sin2d', 'fixed_val_blocks'])
 
         # convert phase bounds/ fixed_val_interval from degrees to radians
         self.phase_bounds = [
             degree_phase_bounds[0] * (2 * np.pi) / 360, degree_phase_bounds[1] * (2 * np.pi) / 360
             ]
         
-        self.block_sizes = [block_sizes[0], block_sizes[1] * (2 * np.pi) / 360]
+        block_sizes[1] = block_sizes[1] * (2 * np.pi) / 360
+        self.validation_block_sizes = block_sizes
+
+        self.is_classification = False
 
         self.model_inner = SinusoidalNetwork(params).to(self.device)
 
         MAML.__init__(self, params)
 
     def _get_priority_queue(self):
+        """Initiate priority queue"""
+        if self.task_type == 'sin3d':
+            param_ranges = self.params.get(["priority_queue", "param_ranges_3d"])
+            block_sizes = self.params.get(["priority_queue", "block_sizes_3d"])
+        elif self.task_type == 'sin2d':
+            param_ranges = self.params.get(["priority_queue", "param_ranges_2d"])
+            block_sizes = self.params.get(["priority_queue", "block_sizes_2d"])
         return  SinePriorityQueue(
                     queue_resume=self.params.get(["resume", "priority_queue"]),
                     counts_resume=self.params.get(["resume", "queue_counts"]),
                     sample_type=self.params.get(["priority_queue", "sample_type"]),
-                    block_sizes=self.params.get(["priority_queue", "block_sizes"]),
-                    param_ranges=self.params.get(["priority_queue", "param_ranges"]),
+                    block_sizes=block_sizes,
+                    param_ranges=param_ranges,
                     initial_value=self.params.get(["priority_queue", "initial_value"]),
                     epsilon_start=self.params.get(["priority_queue", "epsilon_start"]),
                     epsilon_final=self.params.get(["priority_queue", "epsilon_final"]),
@@ -147,22 +163,32 @@ class SineMAML(MAML):
         In the case of sinusoidal regression we split the parameter space equally.
         """
         # mesh of equally partitioned state space
-        amplitude_spectrum, phase_spectrum = np.mgrid[
-            self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.block_sizes[0],
-            self.phase_bounds[0]:self.phase_bounds[1]:self.block_sizes[1]
-            ]
-
-        parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
+        if self.task_type == 'sin3d':
+            amplitude_spectrum, phase_spectrum, frequency_spectrum = np.mgrid[
+                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.validation_block_sizes[0],
+                self.phase_bounds[0]:self.phase_bounds[1]:self.validation_block_sizes[1],
+                self.frequency_bounds[0]:self.frequency_bounds[1]:self.validation_block_sizes[2]
+                ]
+            parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten(), frequency_spectrum.flatten())).T
+        else:
+            amplitude_spectrum, phase_spectrum = np.mgrid[
+                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.validation_block_sizes[0],
+                self.phase_bounds[0]:self.phase_bounds[1]:self.validation_block_sizes[1]
+                ]
+            parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
 
         fixed_validation_tasks = []
 
-        def generate_sin(amplitude, phase):
+        def generate_sin(amplitude, phase, frequency=1):
             def modified_sin(x):
-                return amplitude * np.sin(phase + x)
+                return amplitude * np.sin(phase + frequency * x)
             return modified_sin
 
         for param_pair in parameter_space_tuples:
-            fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
+            if self.task_type == 'sin3d':
+                fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1], frequency=param_pair[2]))
+            else:
+                fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
 
         return parameter_space_tuples, fixed_validation_tasks
 
@@ -245,22 +271,30 @@ class SinePriorityQueue(PriorityQueue):
         self.figure_locsx, self.figure_locsy, self.figure_labelsx, self.figure_labelsy = self._get_figure_labels()
 
     def _get_figure_labels(self):
-        xlocs = np.arange(0, self.queue.shape[1])
-        ylocs = np.arange(0, self.queue.shape[0])
+        xlocs = np.arange(0, self._queue.shape[1])
+        ylocs = np.arange(0, self._queue.shape[0])
         xlabels = np.arange(self.param_ranges[1][0], self.param_ranges[1][1], self.block_sizes[1])
         ylabels = np.arange(self.param_ranges[0][0], self.param_ranges[0][1], self.block_sizes[0])
         return xlocs, ylocs, xlabels, ylabels
 
-    def visualise_priority_queue(self):
+    def visualise_priority_queue(self, feature='losses'):
         """
-        Produces plot of priority queue. 
+        Produces plot of priority queue (losses or counts) 
 
         Discrete vs continuous, 2d heatmap vs 3d.
+
+        :param feature: which aspect of queue to visualise. 'losses' or 'counts'
+        :retrun fig: matplotlib figure showing heatmap of priority queue feature
         """
-        if type(self.queue) == np.ndarray:
-            if len(self.queue.shape) == 2:
+        if type(self._queue) == np.ndarray:
+            if len(self._queue.shape) == 2:
                 fig = plt.figure()
-                plt.imshow(self.queue)
+                if feature == 'losses':
+                    plt.imshow(self._queue)
+                elif feature == 'counts':
+                    plt.imshow(self.sample_counts)
+                else:
+                    raise ValueError("feature type not recognised. Use 'losses' or 'counts'")
                 plt.colorbar()
                 plt.xlabel("Phase")
                 plt.ylabel("Amplitude")
@@ -277,7 +311,8 @@ class SinePriorityQueue(PriorityQueue):
 
                 return fig
             else:
-                raise ValueError("Visualisation with parameter space dimension > 2 not supported")
+                warnings.warn("Visualisation with parameter space dimension > 2 not supported", Warning)   
+                return None
         else:
             raise NotImplementedError("Visualisation for dictionary queue not implemented")
 
@@ -285,7 +320,7 @@ class SinePriorityQueue(PriorityQueue):
         """
         Produces probability distribution plot of losses in the priority queue
         """
-        all_losses = self.queue.flatten()
+        all_losses = self._queue.flatten()
 
         hist, bin_edges = np.histogram(all_losses, bins=int(0.1 * len(all_losses)))
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
