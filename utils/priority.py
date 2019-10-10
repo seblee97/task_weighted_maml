@@ -155,7 +155,6 @@ class PriorityQueue(ABC):
             task_probability = 1.
 
         elif 'sample_under_pdf' in self.sample_type:
-
             indices, task_probability = utils.custom_functions.sample_nd_array(nd_array=self._queue)
             if "importance" not in self.sample_type:
                 task_probability = 1.
@@ -190,8 +189,11 @@ class PriorityQueue(ABC):
             raise ValueError("No sample_type named {}. Please try either 'max', 'epsilon_greedy', 'sample_under_pdf', or 'interpolate_and_sample_under_pdf'".format(self.sample_type))
 
         # add to sample count of max_indices
-        self.sample_counts[tuple(indices)] += 1
-        
+        if len(indices) == 1:
+            self.sample_counts[indices[0]] += 1
+        else:
+            self.sample_counts[tuple(indices)] += 1
+
         # convert samples/max indices to parameter values (i.e. scale by parameter ranges)
         if self.scale_parameters:
             parameter_values = [p[0] + i * b + random.uniform(0, b) for (p, i, b) in zip(self.param_ranges, indices, self.block_sizes)]
