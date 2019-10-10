@@ -328,6 +328,7 @@ class MAML(ABC):
             print("loss: ", float(np.mean(meta_loss)))
 
             if self.priority_sample:
+                # import pdb; pdb.set_trace()
                 for t in range(len(meta_loss)):
                     if self.is_classification:
                         for ti in range(len(max_indices[t])):
