@@ -48,6 +48,10 @@ omniglot:
   examples_per_class:          80                             # number of examples of each class (includes any data augmentation)
   N:                           5                              # N-way (NK) classification
   one_hot_ground_truth:        False                          # whether to have ground truth as index or one-hot vector
+  in_channels:                 1                              # number of channels in image (1 for grayscale, 3 for RGB)
+  filter_size:                 3                              # width/height of filter (square on)
+  stride:                      2                              # stride to be used in convolutions 
+  padding:                     1                              # padding to add to input in convolutions
 
 # priority queue configuration
 
