@@ -90,8 +90,10 @@ if __name__ == "__main__":
             print("Finished preprocessing images. Move onto training...")
         if args.framework == 'jax':
             IM = jax_maml.jax_omniglot.OmniglotMAML(maml_parameters, experiment_device)
+        elif args.framework == 'pytorch':
+            IM = maml.omniglot.OmniglotMAML(maml_parameters, experiment_device)
         else:
-            raise ValueError("Invalid framework argument. Use 'jax'")
+            raise ValueError("Invalid framework argument. Use 'jax' or 'pytorch'")
         IM.train()
     else:
         raise ValueError("Unknown task")
