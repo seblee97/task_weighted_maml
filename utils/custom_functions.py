@@ -1,6 +1,6 @@
 import numpy as np 
 
-from typing import List
+from typing import List, Tuple
 
 def sample_nd_array(nd_array: np.array) -> [List[int], float]:
     """
@@ -31,3 +31,19 @@ def sample_nd_array(nd_array: np.array) -> [List[int], float]:
             indices = [int(i[random_choice]) for i in indices]
 
     return indices, sample_probability
+
+
+def get_convolutional_output_dims(input_shape: Tuple, output_depth: int, kernel_sizes: List[int], strides: List[int], paddings: List[int]) -> int:
+    """
+    For convolutional module defined by paramters given, compute number of 
+    parameters in final layer (i.e. input dimension for flatten operation)
+
+    For square inputs with equal stride/pad/kernel magnitudes in height and width
+    TODO: generalise
+    """
+    width_height = input_shape[0]
+    for layer in range(len(kernel_sizes)):
+        width_height = 1 + (width_height + 2 * paddings[layer] - kernel_sizes[layer] - 2) / strides[layer]
+    num_params = int(output_depth * width_height ** 2)
+
+    return num_params
