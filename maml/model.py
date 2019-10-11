@@ -27,14 +27,46 @@ class ModelNetwork(nn.Module):
         self.params = params
         self.device = self.params.get("device")
 
-        self.weights = []
-        self.biases = []
+        self._weights = []
+        self._biases = []
 
         self.layer_dimensions = [self.params.get("input_dimension")] \
                                 + self.params.get("network_layers") \
                                 + [self.params.get("output_dimension")]
 
         self._construct_layers()
+
+    @abstractmethod
+    def get_weights(self):
+        raise NotImplementedError("Base class abstract method")
+
+    @abstractmethod
+    def get_biases(self):
+        raise NotImplementedError("Base class abstract method")
+
+    @abstractmethod
+    def set_weight_gradients(self):
+        raise NotImplementedError("Base class abstract method")
+
+    @abstractmethod
+    def set_bias_gradients(self):
+        raise NotImplementedError("Base class abstract method")
+
+    @abstractmethod
+    def set_weights(self):
+        raise NotImplementedError("Base class abstract method")
+
+    @abstractmethod
+    def set_biases(self):
+        raise NotImplementedError("Base class abstract method")
+
+    @abstractmethod
+    def update_weights(self):
+        raise NotImplementedError("Base class abstract method")
+
+    @abstractmethod
+    def update_biases(self):
+        raise NotImplementedError("Base class abstract method")
 
     @abstractmethod
     def _construct_layers(self) -> None:
@@ -58,8 +90,8 @@ class ModelNetwork(nn.Module):
         """
         for l in range(len(self.layer_dimensions) - 1):
             std = 1. / np.sqrt(self.layer_dimensions[l])
-            self.weights[l].data.uniform_(-std, std) # uniform Gaussian initialisation
-            self.biases[l].data.uniform_(-std, std)
+            self.get_weights()[l].data.uniform_(-std, std) # uniform Gaussian initialisation
+            self.get_biases()[l].data.uniform_(-std, std)
 
 
 class MAML(ABC):
@@ -118,7 +150,7 @@ class MAML(ABC):
         self.model_outer = copy.deepcopy(self.model_inner).to(self.device)
 
         self.meta_optimiser = optim.Adam(
-            self.model_outer.weights + self.model_outer.biases, lr=self.meta_lr
+            self.model_outer.get_weights() + self.model_outer.get_biases(), lr=self.meta_lr
             )
 
         if self.params.get(["resume", "model"]):
@@ -182,8 +214,8 @@ class MAML(ABC):
         Outer loop of MAML algorithm, consists of multiple inner loops and a meta update step
         """
         # get copies of meta network parameters
-        weight_copies = [w.clone() for w in self.model_outer.weights]
-        bias_copies = [b.clone() for b in self.model_outer.biases]
+        weight_copies = [w.clone() for w in self.model_outer.get_weights()]
+        bias_copies = [b.clone() for b in self.model_outer.get_biases()]
 
         # initialise cumulative gradient to be used in meta update step
         meta_update_gradient = [0 for _ in range(len(weight_copies) + len(bias_copies))]
@@ -206,11 +238,11 @@ class MAML(ABC):
         # zero previously collected gradients
         self.meta_optimiser.zero_grad()
 
-        for i in range(len(self.model_outer.weights)):
-            self.model_outer.weights[i].grad = meta_update_gradient[i] / self.task_batch_size
+        for i in range(len(self.model_outer.get_weights())):
+            self.model_outer.set_weight_gradients(i, meta_update_gradient[i] / self.task_batch_size)
             meta_update_gradient[i] = 0
-        for j in range(len(self.model_outer.biases)):
-            self.model_outer.biases[j].grad = meta_update_gradient[i + j + 1] / self.task_batch_size
+        for j in range(len(self.model_outer.get_biases())):
+            self.model_outer.set_bias_gradients(j, meta_update_gradient[i + j + 1] / self.task_batch_size)
             meta_update_gradient[i + j + 1] = 0
 
         self.meta_optimiser.step()
@@ -224,10 +256,9 @@ class MAML(ABC):
 
         :return meta_update_grad: gradient to be fed to meta update
         """
-
         # reset network weights to meta network weights
-        self.model_inner.weights = [w.clone() for w in weight_copies]
-        self.model_inner.biases = [b.clone() for b in bias_copies]
+        self.model_inner.set_weights([w.clone() for w in weight_copies])
+        self.model_inner.set_biases([b.clone() for b in bias_copies])
 
         # sample a task from task distribution and generate x, y tensors for that task
         if self.priority_sample:
@@ -264,14 +295,17 @@ class MAML(ABC):
             loss = self._compute_loss(prediction, y_batch)
 
             # compute gradients wrt inner model copy
-            inner_trainable_parameters = [w for w in self.model_inner.weights] + [b for b in self.model_inner.biases]
+            inner_trainable_parameters = [w for w in self.model_inner.get_weights()] + [b for b in self.model_inner.get_biases()]
+            for param in inner_trainable_parameters:
+                param.requires_grad = True
             gradients = torch.autograd.grad(loss, inner_trainable_parameters, create_graph=True, retain_graph=True)
 
             # update inner model using current model 
-            for i in range(len(self.model_inner.weights)):
-                self.model_inner.weights[i] = self.model_inner.weights[i] - self.inner_update_lr * gradients[i]
-            for j in range(len(self.model_inner.biases)):
-                self.model_inner.biases[j] = self.model_inner.biases[j] - self.inner_update_lr * gradients[i + j + 1]
+            for i in range(len(self.model_inner.get_weights())):
+                import pdb; pdb.set_trace()
+                self.model_inner.update_weights(i, gradients[i], self.inner_update_lr)
+            for j in range(len(self.model_inner.get_biases())):
+                self.model_inner.update_biases(j, gradients[i + j+ 1], self.inner_update_lr)
 
         # generate x, y tensors for meta update task sample
         meta_update_samples_x, meta_update_samples_y = self._generate_batch(task=task, batch_size=self.inner_update_k)
