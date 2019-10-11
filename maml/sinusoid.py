@@ -230,20 +230,45 @@ class SinusoidalNetwork(ModelNetwork):
             layer_bias_tensor = torch.Tensor(size=[self.layer_dimensions[l + 1]]).to(self.device)
             layer_bias_tensor.requires_grad = True
 
-            self.weights.append(layer_weight_tensor)
-            self.biases.append(layer_bias_tensor)
+            self._weights.append(layer_weight_tensor)
+            self._biases.append(layer_bias_tensor)
 
         self._reset_parameters()
 
     def forward(self, x):
 
-        for l in range(len(self.weights) - 1):
-            x = F.linear(x, self.weights[l].t(), self.biases[l])
+        for l in range(len(self._weights) - 1):
+            x = F.linear(x, self._weights[l].t(), self._biases[l])
             x = F.relu(x)
     
-        y = F.linear(x, self.weights[-1].t(), self.biases[-1]) # no relu on output layer
+        y = F.linear(x, self._weights[-1].t(), self._biases[-1]) # no relu on output layer
 
         return y
+
+    def get_weights(self):
+        return self._weights
+
+    def get_biases(self):
+        return self._biases
+
+    def set_weights(self, weights: List):
+        self.weights = weights
+
+    def set_biases(self, biases: List):
+        self.biases = biases
+
+    def set_weight_gradients(self, layer_index: int, gradient):
+        self._weights[layer_index].grad = gradient
+
+    def set_bias_gradients(self, layer_index: int, gradient):
+        self._biases[layer_index].grad = gradient
+
+    def update_weights(self, layer_index, gradients, learning_rate):
+        self._weights[layer_index] = self._weights[layer_index] - learning_rate * gradients
+
+    def update_biaes(self, layer_index, gradients, learning_rate):
+        self._biases[layer_index] = self._biases[layer_index] - learning_rate * gradients
+
 
 class SinePriorityQueue(PriorityQueue):
 
