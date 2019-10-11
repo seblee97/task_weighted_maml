@@ -1,3 +1,3 @@
 from .sinusoid import SineMAML, SinePriorityQueue, SinusoidalNetwork
-from .image_classification import ImageClassificationNetwork
+from .omniglot import OmniglotNetwork, OmniglotMAML, OmniglotPriorityQueue
 from .quadratic import QuadraticMAML, QuadraticNetwork
