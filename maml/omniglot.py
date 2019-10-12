@@ -12,6 +12,7 @@ import math
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 import time
 import os
 
@@ -103,40 +104,71 @@ class OmniglotMAML(MAML):
         raise NotImplementedError
 
     def visualise(self, model_iterations, task, validation_x, validation_y, save_name, visualise_all=True):
+        """
+        Visualise qualitative run.
 
-        dummy_model = SinusoidalNetwork(self.params)
+        :param validation_model_iterations: parameters of model after successive fine-tuning steps
+        :param val_task: task being evaluated
+        :param validation_x_batch: k data points fed to model for finetuning
+        :param validation_y_batch: ground truth data associated with validation_x_batch
+        :param save_name: name of file to be saved
+        :param visualise_all: whether to visualise all fine-tuning steps or just final 
+        """
 
-        # ground truth
-        plot_x = np.linspace(self.domain_bounds[0], self.domain_bounds[1], 100)
-        plot_x_tensor = torch.tensor([[x] for x in plot_x]).to(self.device)
-        plot_y_ground_truth = [task(xi) for xi in plot_x]
+        if visualise_all:
+            figure_y_dimension = self.N + len(model_iterations)
+        else:
+            figure_y_dimension = self.N + 1
 
-        fig = plt.figure()
-        plt.plot(plot_x, plot_y_ground_truth, label="Ground Truth")
+        fig = plt.figure(figsize=(self.k, figure_y_dimension))
+        fig.suptitle("Input to N-way, k-shot Classification")
 
-        dummy_model.weights = model_iterations[-1][0]
-        dummy_model.biases = model_iterations[-1][1]
+        grid_spec = gridspec.GridSpec(
+            figure_y_dimension, 
+            self.k, 
+            figure=fig, 
+            height_ratios=[1 for _ in range(self.N)] + [3 for _ in range(figure_y_dimension - self.N)], 
+            width_ratios=[1 for _ in range(self.k)]
+            )
 
-        final_plot_y_prediction = dummy_model(plot_x_tensor)
-        plt.plot(plot_x, final_plot_y_prediction.cpu().detach().numpy(), linestyle='dashed', linewidth=3.0, label='Fine-tuned MAML final update')
+        nk_validation_x = validation_x.reshape(self.N, self.k, self.image_shape[0], self.image_shape[1])
+        nk_validation_y = validation_y.reshape(self.N, self.k)
+        
+        # add input data to figure
+        for i in range(self.N):
+            for j in range(self.k):
+                ax = fig.add_subplot(grid_spec[i, j])
+                ax.imshow(nk_validation_x[i][j])
+                ax.set_title("Class {} out of {}".format(i, self.N), fontdict={'fontsize':5})
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+        dummy_model = OmniglotNetwork(self.params)
+
+        dummy_model._weights = model_iterations[-1][0]
+        dummy_model._biases = model_iterations[-1][1]
+
+        final_predictions_array = dummy_model(validation_x)
+        final_predictions_accuracy, final_accuracy_matrix = self._get_accuracy(logits=final_predictions_array, ground_truth=validation_y, return_plot=True)
+
+        final_prediction_axis = fig.add_subplot(grid_spec[self.N, :])
+        final_prediction_axis.imshow(final_accuracy_matrix, cmap='RdYlGn', vmin=0, vmax=1)
+        final_prediction_axis.set_title("Accuracy: {}".format(final_predictions_accuracy))
 
         if visualise_all:
             for i, (model_weights, model_biases) in enumerate(model_iterations[:-1]):
                 
-                dummy_model.weights = model_weights
-                dummy_model.biases = model_biases
+                dummy_model._weights = model_weights
+                dummy_model._biases = model_biases
 
-                plot_y_prediction = dummy_model(plot_x_tensor)
-                plt.plot(plot_x, plot_y_prediction.cpu().detach().numpy(), linestyle='dashed', label='Fine-tuned MAML {} update'.format(i))
+                y_prediction_array = dummy_model(validation_x)
+                y_prediction_accuracy, accuracy_matrix = self._get_accuracy(logits=y_prediction_array, ground_truth=validation_y, return_plot=True)
 
-        plt.scatter(validation_x.cpu(), validation_y.cpu(), marker='o', label='K Points')
-
-        plt.title("Validation of Sinusoid Meta-Regression")
-        plt.xlabel(r"x")
-        plt.ylabel(r"sin(x)")
-        plt.legend()
+                prediction_axis = fig.add_subplot(grid_spec[self.N + 1 + i, :])
+                prediction_axis.imshow(accuracy_matrix, cmap='RdYlGn', vmin=0, vmax=1)
         
         # fig.savefig(self.params.get("checkpoint_path") + save_name)
+
         plt.close()
 
         return fig
@@ -214,8 +246,8 @@ class OmniglotNetwork(ModelNetwork):
     def __init__(self, params):
         ModelNetwork.__init__(self, params)
 
-        self.weight_layer_keys = ['conv1.weight', 'conv2.weight', 'conv3.weight', 'conv4.weight', 'linear.weight']
-        self.bias_layer_keys = ['conv1.bias', 'conv2.bias', 'conv3.bias', 'conv4.bias', 'linear.bias']
+        self.stride_mag = self.params.get(["omniglot", "stride"])
+        self.padding_mag = self.params.get(["omniglot", "padding"])
 
     def _construct_layers(self):
         network_layers = self.params.get("network_layers")
@@ -223,69 +255,63 @@ class OmniglotNetwork(ModelNetwork):
         filter_size = self.params.get(["omniglot", "filter_size"])
         output_dimension = self.params.get(["omniglot", "N"])
         input_dimension = self.params.get(["omniglot", "image_output_shape"])
-        stride_mag = self.params.get(["omniglot", "stride"])
-        padding_mag = self.params.get(["omniglot", "padding"])
+        channels = [in_channels] + network_layers[:-1]
 
-        self.conv1 = nn.Conv2d(in_channels, out_channels=network_layers[0], kernel_size=filter_size, stride=stride_mag, padding=padding_mag)
-        self.conv2 = nn.Conv2d(network_layers[0], out_channels=network_layers[1], kernel_size=filter_size, stride=stride_mag, padding=padding_mag)
-        self.conv3 = nn.Conv2d(network_layers[1], out_channels=network_layers[2], kernel_size=filter_size, stride=stride_mag, padding=padding_mag)
-        self.conv4 = nn.Conv2d(network_layers[2], out_channels=network_layers[3], kernel_size=filter_size, stride=stride_mag, padding=padding_mag)
-        
-        self.bn1 = nn.BatchNorm2d(network_layers[0])
-        self.bn2 = nn.BatchNorm2d(network_layers[1])
-        self.bn3 = nn.BatchNorm2d(network_layers[2])
-        self.bn4 = nn.BatchNorm2d(network_layers[3])
+        for l in range(len(network_layers)):
+            
+            # convolutional layers
+            layer_weight_tensor = torch.Tensor(size=(network_layers[l], channels[l], filter_size, filter_size)).to(self.device)
+            layer_weight_tensor.requires_grad = True
 
-        flattened_dimension = get_convolutional_output_dims(
-            input_shape=input_dimension, output_depth=network_layers[-1], kernel_sizes=[filter_size for _ in range(len(network_layers))], 
-            strides=[stride_mag for _ in range(len(network_layers))], paddings=[padding_mag for _ in range(len(network_layers))]
-        )
+            layer_bias_tensor = torch.Tensor(size=[network_layers[l]]).to(self.device)
+            layer_bias_tensor.requires_grad = True
+
+            self._weights.append(layer_weight_tensor)
+            self._biases.append(layer_bias_tensor)
+
+            # batch norm layers
+            batch_norm_weight_size = [network_layers[l]]
+            batch_norm_bias_size = [network_layers[l]]
+
+            batch_norm_weight_tensor = torch.Tensor(size=batch_norm_weight_size)
+            batch_norm_weight_tensor.requires_grad = True
+            
+            batch_norm_bias_tensor = torch.Tensor(size=batch_norm_bias_size)
+            batch_norm_bias_tensor.requires_grad = True
+
+            self._weights.append(batch_norm_weight_tensor)
+            self._biases.append(batch_norm_bias_tensor)
 
         flattened_dimension = 256
 
-        self.linear = nn.Linear(flattened_dimension, output_dimension)
+        linear_layer_weight_tensor = torch.Tensor(size=(flattened_dimension, output_dimension)).to(self.device)
+        linear_layer_weight_tensor.requires_grad = True
 
-        # self._reset_parameters()
+        linear_layer_bias_tensor = torch.Tensor(size=[output_dimension])
+        linear_layer_bias_tensor.requires_grad = True
+
+        self._weights.append(linear_layer_weight_tensor)
+        self._biases.append(linear_layer_bias_tensor)
+
+        self._reset_parameters()
 
     def forward(self, x):
 
-        x = F.relu(self.bn1(self.conv1(x)))
-        x = F.relu(self.bn2(self.conv2(x)))
-        x = F.relu(self.bn3(self.conv3(x)))
-        x = F.relu(self.bn4(self.conv4(x)))
+        for l in range(0, len(self._weights) - 1, 2):
+            x = F.conv2d(x, self._weights[l], self._biases[l], stride=self.stride_mag, padding=self.padding_mag)
+            
+            input_mean = torch.mean(x, dim=[0, 2, 3]).detach()
+            input_var = torch.var(x, dim=[0, 2, 3]).detach()
+            
+            x = F.batch_norm(
+                x, running_mean=input_mean, running_var=input_var, weight=self._weights[l + 1], bias=self._biases[l + 1]
+                )
+            x = F.relu(x)
 
         x = x.reshape((25, -1))
-        print(x.shape)
-
-        x = F.softmax(self.linear(x))
+        x = F.softmax(F.linear(x, self._weights[-1].t(), self._biases[-1]), dim=1)
 
         return x
-
-    def get_weights(self):
-        return [self.state_dict()[l] for l in self.weight_layer_keys]
-
-    def get_biases(self):
-        return [self.state_dict()[l] for l in self.bias_layer_keys]
-
-    def set_weight_gradients(self, layer_index, gradient):
-        self.state_dict()[self.weight_layer_keys[layer_index]].grad = gradient
-
-    def set_bias_gradients(self, layer_index, gradient):
-        self.state_dict()[self.bias_layer_keys[layer_index]].grad = gradient
-
-    def set_weights(self, weights: List):
-        for l, weight_layer in enumerate(weights):
-            self.state_dict()[self.weight_layer_keys[l]] = weight_layer
-
-    def set_biases(self, biases: List):
-        for l, bias_layer in enumerate(biases):
-            self.state_dict()[self.bias_layer_keys[l]] = bias_layer
-
-    def update_weights(self, layer_index, gradients, learning_rate):
-        self.state_dict()[self.weight_layer_keys[layer_index]] -= learning_rate * gradients
-
-    def update_biases(self, layer_index, gradients, learning_rate):
-        self.state_dict()[self.bias_layer_keys[layer_index]] -= learning_rate * gradients
 
 
 class OmniglotPriorityQueue(PriorityQueue):
