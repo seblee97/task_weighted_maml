@@ -37,38 +37,6 @@ class ModelNetwork(nn.Module):
         self._construct_layers()
 
     @abstractmethod
-    def get_weights(self):
-        raise NotImplementedError("Base class abstract method")
-
-    @abstractmethod
-    def get_biases(self):
-        raise NotImplementedError("Base class abstract method")
-
-    @abstractmethod
-    def set_weight_gradients(self):
-        raise NotImplementedError("Base class abstract method")
-
-    @abstractmethod
-    def set_bias_gradients(self):
-        raise NotImplementedError("Base class abstract method")
-
-    @abstractmethod
-    def set_weights(self):
-        raise NotImplementedError("Base class abstract method")
-
-    @abstractmethod
-    def set_biases(self):
-        raise NotImplementedError("Base class abstract method")
-
-    @abstractmethod
-    def update_weights(self):
-        raise NotImplementedError("Base class abstract method")
-
-    @abstractmethod
-    def update_biases(self):
-        raise NotImplementedError("Base class abstract method")
-
-    @abstractmethod
     def _construct_layers(self) -> None:
         """
         Build up layers (weights and biases) of network using dimensions specified in configuration
@@ -88,10 +56,16 @@ class ModelNetwork(nn.Module):
         """
         Reset all parameters in network using unifrom Gaussian initialisation
         """
-        for l in range(len(self.layer_dimensions) - 1):
-            std = 1. / np.sqrt(self.layer_dimensions[l])
-            self.get_weights()[l].data.uniform_(-std, std) # uniform Gaussian initialisation
-            self.get_biases()[l].data.uniform_(-std, std)
+        for l in range(len(self._weights)):
+            # if type(self.layer_dimensions[l]) == int:
+            #     std = 1. / np.sqrt(self.layer_dimensions[l])
+            # elif type(self.layer_dimensions[l]) == list:
+            #     std = 1. / np.sqrt(np.prod(self.layer_dimensions[l]))
+            # elif type(self.layer_dimensions[l]) == np.ndarray:
+            #     std = 1. / np.sqrt(np.prod(self.layer_dimensions[l]))
+            std = 1. / np.sqrt(np.prod(self._weights[l].shape))
+            self._weights[l].data.uniform_(-std, std) # uniform Gaussian initialisation
+            self._biases[l].data.uniform_(-std, std)
 
 
 class MAML(ABC):
@@ -150,7 +124,7 @@ class MAML(ABC):
         self.model_outer = copy.deepcopy(self.model_inner).to(self.device)
 
         self.meta_optimiser = optim.Adam(
-            self.model_outer.get_weights() + self.model_outer.get_biases(), lr=self.meta_lr
+            self.model_outer._weights + self.model_outer._biases, lr=self.meta_lr
             )
 
         if self.params.get(["resume", "model"]):
@@ -209,13 +183,30 @@ class MAML(ABC):
         """
         raise NotImplementedError("Base class abstract method")
 
+    def _get_accuracy(self, logits: np.ndarray, ground_truth:np.ndarray, return_plot=False):
+        """
+        Computes accuracy of a batch of predictions.
+
+        :param logits: N x k batch of logits
+        :param ground_truth: (N x k) ground truth indices
+        """
+        np_logits = logits.detach().numpy()
+        np_ground = ground_truth.detach().numpy()
+        predictions = np.array([int(np.argmax(i)) for i in np_logits]).reshape((self.N, self.k))
+        accuracy_matrix = predictions == np.array(np_ground).reshape(self.N, self.k)
+        accuracy = np.sum(accuracy_matrix) / (np.prod(accuracy_matrix.shape))
+        if return_plot:
+            return accuracy, accuracy_matrix
+        else:
+            return accuracy
+
     def outer_training_loop(self, step_count: int) -> None:
         """
         Outer loop of MAML algorithm, consists of multiple inner loops and a meta update step
         """
         # get copies of meta network parameters
-        weight_copies = [w.clone() for w in self.model_outer.get_weights()]
-        bias_copies = [b.clone() for b in self.model_outer.get_biases()]
+        weight_copies = [w.clone() for w in self.model_outer._weights]
+        bias_copies = [b.clone() for b in self.model_outer._biases]
 
         # initialise cumulative gradient to be used in meta update step
         meta_update_gradient = [0 for _ in range(len(weight_copies) + len(bias_copies))]
@@ -230,6 +221,8 @@ class MAML(ABC):
             for i in range(len(weight_copies) + len(bias_copies)):
                 meta_update_gradient[i] += importance_weight * task_meta_gradient[i].detach()
 
+        print("loss: ", float(np.mean(meta_loss)))
+
         self.writer.add_scalar('meta_metrics/meta_update_loss_mean', np.mean(meta_loss), step_count)
         self.writer.add_scalar('meta_metrics/meta_update_loss_std', np.std(meta_loss), step_count)
         self.writer.add_scalar('queue_metrics/importance_weights_mean', np.mean(task_importance_weights), step_count)
@@ -238,11 +231,11 @@ class MAML(ABC):
         # zero previously collected gradients
         self.meta_optimiser.zero_grad()
 
-        for i in range(len(self.model_outer.get_weights())):
-            self.model_outer.set_weight_gradients(i, meta_update_gradient[i] / self.task_batch_size)
+        for i in range(len(self.model_outer._weights)):
+            self.model_outer._weights[i].grad = meta_update_gradient[i] / self.task_batch_size
             meta_update_gradient[i] = 0
-        for j in range(len(self.model_outer.get_biases())):
-            self.model_outer.set_bias_gradients(j, meta_update_gradient[i + j + 1] / self.task_batch_size)
+        for j in range(len(self.model_outer._biases)):
+            self.model_outer._biases[j].grad = meta_update_gradient[i + j + 1] / self.task_batch_size
             meta_update_gradient[i + j + 1] = 0
 
         self.meta_optimiser.step()
@@ -257,8 +250,8 @@ class MAML(ABC):
         :return meta_update_grad: gradient to be fed to meta update
         """
         # reset network weights to meta network weights
-        self.model_inner.set_weights([w.clone() for w in weight_copies])
-        self.model_inner.set_biases([b.clone() for b in bias_copies])
+        self.model_inner._weights = [w.clone() for w in weight_copies]
+        self.model_inner._biases =  [b.clone() for b in bias_copies]
 
         # sample a task from task distribution and generate x, y tensors for that task
         if self.priority_sample:
@@ -295,17 +288,14 @@ class MAML(ABC):
             loss = self._compute_loss(prediction, y_batch)
 
             # compute gradients wrt inner model copy
-            inner_trainable_parameters = [w for w in self.model_inner.get_weights()] + [b for b in self.model_inner.get_biases()]
-            for param in inner_trainable_parameters:
-                param.requires_grad = True
+            inner_trainable_parameters = [w for w in self.model_inner._weights] + [b for b in self.model_inner._biases]
             gradients = torch.autograd.grad(loss, inner_trainable_parameters, create_graph=True, retain_graph=True)
 
             # update inner model using current model 
-            for i in range(len(self.model_inner.get_weights())):
-                import pdb; pdb.set_trace()
-                self.model_inner.update_weights(i, gradients[i], self.inner_update_lr)
-            for j in range(len(self.model_inner.get_biases())):
-                self.model_inner.update_biases(j, gradients[i + j+ 1], self.inner_update_lr)
+            for i in range(len(self.model_inner._weights)):
+                self.model_inner._weights[i] = self.model_inner._weights[i] - self.inner_update_lr * gradients[i]
+            for j in range(len(self.model_inner._biases)):
+                self.model_inner._biases[j] = self.model_inner._biases[j] - self.inner_update_lr * gradients[i + j+ 1]
 
         # generate x, y tensors for meta update task sample
         meta_update_samples_x, meta_update_samples_y = self._generate_batch(task=task, batch_size=self.inner_update_k)
@@ -323,7 +313,7 @@ class MAML(ABC):
             self.priority_queue.insert(key=max_indices, data=meta_update_loss)
 
         # compute gradients wrt outer model (meta network)
-        meta_update_grad = torch.autograd.grad(meta_update_loss, self.model_outer.weights + self.model_outer.biases)
+        meta_update_grad = torch.autograd.grad(meta_update_loss, self.model_outer._weights + self.model_outer._biases)
 
         individual_loss = float(meta_update_loss)
 
@@ -334,6 +324,7 @@ class MAML(ABC):
             importance_weight = 1.
 
         return meta_update_grad, individual_loss, importance_weight
+
 
     def train(self) -> None:
         """
@@ -366,6 +357,7 @@ class MAML(ABC):
 
         validation_losses = []
         validation_figures = []
+        validation_accuracies = []
 
         validation_parameter_tuples, validation_tasks = self._get_validation_tasks()
 
@@ -380,7 +372,7 @@ class MAML(ABC):
             # sample a task for validation fine-tuning
             validation_x_batch, validation_y_batch = self._generate_batch(task=val_task, batch_size=self.validation_k)
 
-            validation_model_iterations.append(([w.clone() for w in validation_network.weights], [b.clone() for b in validation_network.biases]))
+            validation_model_iterations.append(([w.clone() for w in validation_network._weights], [b.clone() for b in validation_network._biases]))
 
             # inner loop update
             for _ in range(self.validation_num_inner_updates):
@@ -392,17 +384,17 @@ class MAML(ABC):
                 validation_loss = self._compute_loss(validation_prediction, validation_y_batch)
 
                 # find gradients of validation loss wrt inner model weights
-                network_trainable_parameters = [w for w in validation_network.weights] + [b for b in validation_network.biases]
+                network_trainable_parameters = [w for w in validation_network._weights] + [b for b in validation_network._biases]
                 validation_update_grad = torch.autograd.grad(validation_loss, network_trainable_parameters, create_graph=True, retain_graph=True)
 
                 # update inner model gradients 
-                for i in range(len(validation_network.weights)):
-                    validation_network.weights[i] = validation_network.weights[i] - self.inner_update_lr * validation_update_grad[i]
-                for j in range(len(validation_network.biases)):
-                    validation_network.biases[j] = validation_network.biases[j] - self.inner_update_lr * validation_update_grad[i + j + 1]
+                for i in range(len(validation_network._weights)):
+                    validation_network._weights[i] = validation_network._weights[i] - self.inner_update_lr * validation_update_grad[i]
+                for j in range(len(validation_network._biases)):
+                    validation_network._biases[j] = validation_network._biases[j] - self.inner_update_lr * validation_update_grad[i + j + 1]
 
-                current_weights = [w.clone() for w in validation_network.weights]
-                current_biases = [b.clone() for b in validation_network.biases]
+                current_weights = [w.clone() for w in validation_network._weights]
+                current_biases = [b.clone() for b in validation_network._biases]
                 validation_model_iterations.append((current_weights, current_biases))
             
             # sample a new batch from same validation task for testing fine-tuned model
@@ -413,6 +405,10 @@ class MAML(ABC):
 
             validation_losses.append(float(test_loss))
 
+            if self.is_classification:
+                test_accuracy = self._get_accuracy(test_prediction, test_y_batch)
+                validation_accuracies.append(test_accuracy)
+
             if visualise:
                 save_name = 'validation_step_{}_rep_{}.png'.format(step_count, r)
                 validation_fig = self.visualise(
@@ -422,10 +418,14 @@ class MAML(ABC):
 
         mean_validation_loss = np.mean(validation_losses)
         var_validation_loss = np.std(validation_losses)
+        mean_validation_accuracies = np.mean(validation_accuracies)
 
         print('--- validation loss @ step {}: {}'.format(step_count, mean_validation_loss))
         self.writer.add_scalar('meta_metrics/meta_validation_loss_mean', mean_validation_loss, step_count)
         self.writer.add_scalar('meta_metrics/meta_validation_loss_std', var_validation_loss, step_count)
+        if self.is_classification:
+            print('--- validation accuracy @ step {}: {}'.format(step_count, mean_validation_accuracies))
+            self.writer.add_scalar('meta_metrics/validation_accuracy_mean', mean_validation_accuracies, step_count)
 
         # generate heatmap of validation losses 
         if self.fixed_validation:
