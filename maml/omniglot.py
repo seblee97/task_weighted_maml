@@ -300,8 +300,8 @@ class OmniglotNetwork(ModelNetwork):
         for l in range(0, len(self._weights) - 1, 2):
             x = F.conv2d(x, self._weights[l], self._biases[l], stride=self.stride_mag, padding=self.padding_mag)
             
-            input_mean = torch.mean(x, dim=[0, 2, 3]).detach()
-            input_var = torch.var(x, dim=[0, 2, 3]).detach()
+            input_mean = torch.mean(x, dim=[0, 2, 3]).to(self.device).detach()
+            input_var = torch.var(x, dim=[0, 2, 3])..to(self.device).detach()
             
             x = F.batch_norm(
                 x, running_mean=input_mean, running_var=input_var, weight=self._weights[l + 1], bias=self._biases[l + 1]
