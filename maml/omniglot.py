@@ -131,8 +131,8 @@ class OmniglotMAML(MAML):
             width_ratios=[1 for _ in range(self.k)]
             )
 
-        nk_validation_x = validation_x.reshape(self.N, self.k, self.image_shape[0], self.image_shape[1])
-        nk_validation_y = validation_y.reshape(self.N, self.k)
+        nk_validation_x = validation_x.reshape(self.N, self.k, self.image_shape[0], self.image_shape[1]).cpu()
+        nk_validation_y = validation_y.reshape(self.N, self.k).cpu()
         
         # add input data to figure
         for i in range(self.N):
