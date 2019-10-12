@@ -190,8 +190,8 @@ class MAML(ABC):
         :param logits: N x k batch of logits
         :param ground_truth: (N x k) ground truth indices
         """
-        np_logits = logits.detach().numpy()
-        np_ground = ground_truth.detach().numpy()
+        np_logits = logits.cpu().detach().numpy()
+        np_ground = ground_truth.cpu().detach().numpy()
         predictions = np.array([int(np.argmax(i)) for i in np_logits]).reshape((self.N, self.k))
         accuracy_matrix = predictions == np.array(np_ground).reshape(self.N, self.k)
         accuracy = np.sum(accuracy_matrix) / (np.prod(accuracy_matrix.shape))
