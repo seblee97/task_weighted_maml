@@ -192,9 +192,9 @@ class OmniglotMAML(MAML):
         
         x_batch = np.expand_dims(np.stack(unstacked_x_batch), axis=-1)
         x_tensor_shape = (self.N * self.k, 1, self.image_shape[0], self.image_shape[1])
-        x_batch_tensor = torch.Tensor(x_batch.reshape(x_tensor_shape))
+        x_batch_tensor = torch.Tensor(x_batch.reshape(x_tensor_shape)).to(self.device)
 
-        y_batch_tensor = torch.Tensor(unstacked_y_batch).to(torch.long)
+        y_batch_tensor = torch.Tensor(unstacked_y_batch).to(torch.long).to(self.device)
 
         return x_batch_tensor, y_batch_tensor
 
