@@ -273,10 +273,10 @@ class OmniglotNetwork(ModelNetwork):
             batch_norm_weight_size = [network_layers[l]]
             batch_norm_bias_size = [network_layers[l]]
 
-            batch_norm_weight_tensor = torch.Tensor(size=batch_norm_weight_size)
+            batch_norm_weight_tensor = torch.Tensor(size=batch_norm_weight_size).to(self.device)
             batch_norm_weight_tensor.requires_grad = True
             
-            batch_norm_bias_tensor = torch.Tensor(size=batch_norm_bias_size)
+            batch_norm_bias_tensor = torch.Tensor(size=batch_norm_bias_size).to(self.device)
             batch_norm_bias_tensor.requires_grad = True
 
             self._weights.append(batch_norm_weight_tensor)
