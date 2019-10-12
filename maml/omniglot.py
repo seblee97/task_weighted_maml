@@ -287,7 +287,7 @@ class OmniglotNetwork(ModelNetwork):
         linear_layer_weight_tensor = torch.Tensor(size=(flattened_dimension, output_dimension)).to(self.device)
         linear_layer_weight_tensor.requires_grad = True
 
-        linear_layer_bias_tensor = torch.Tensor(size=[output_dimension])
+        linear_layer_bias_tensor = torch.Tensor(size=[output_dimension]).to(self.device)
         linear_layer_bias_tensor.requires_grad = True
 
         self._weights.append(linear_layer_weight_tensor)
