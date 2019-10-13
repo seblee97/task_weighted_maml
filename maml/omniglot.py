@@ -292,6 +292,16 @@ class OmniglotNetwork(ModelNetwork):
 
         return x
 
+    def _reset_parameters(self):
+        for l in range(len(self._weights)):
+            if len(self._weights[l].shape) > 2:
+                torch.nn.init.xavier_uniform(self._weights[l], gain=nn.init.calculate_gain('relu', self._weights[l]))
+            elif len(self._weights[l].shape) == 2:
+                torch.nn.init.xavier_uniform(self._weights[l], gain=nn.init.calculate_gain('linear', self._weights[l]))
+            elif len(self._weights[l].shape) == 1:
+                # batch norm weight layers
+                self._weights[l].data.fill_(1)
+
 
 class OmniglotPriorityQueue(PriorityQueue):
 
