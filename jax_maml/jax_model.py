@@ -340,7 +340,18 @@ class MAML(ABC):
             self.writer.add_scalar('meta_metrics/meta_update_loss_std', float(np.std(meta_loss)), step_count)
 
             print("Time taken for one step: {}".format(time.time() - t0))
-        net_params = self.get_params_from_optimiser(self.optimiser_state)
+
+            del batch_of_tasks
+            del max_indices
+            del task_probabilities
+            del task_importance_weights
+            del x_train
+            del y_train
+            del x_meta
+            del y_meta
+            del meta_loss
+        
+        # net_params = self.get_params_from_optimiser(self.optimiser_state)
 
     def validate(self, step_count: int, visualise: bool=True) -> None:
         """
