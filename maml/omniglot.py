@@ -37,13 +37,21 @@ class OmniglotMAML(MAML):
         print("Loading image dataset...")
         t0 = time.time()
         training_data_path = os.path.join(params.get(["omniglot", "data_path"]), "train_data")
+        test_data_path = os.path.join(params.get(["omniglot", "data_path"]), "test_data")
+        
+        if params.get(["omniglot", "limit_data"]):
+            train_limit = params.get(["omniglot", "limit_data"])
+            test_limit = params.get(["omniglot", "limit_data"])
+        else:
+            train_limit = len(os.listdir(training_data_path))
+            test_limit = len(os.listdir(test_data_path))
+
         self.training_data = [[np.load(os.path.join(training_data_path, char, instance)) 
                                for instance in os.listdir(os.path.join(training_data_path, char))] for 
-                               char in os.listdir(training_data_path)]
-        test_data_path = os.path.join(params.get(["omniglot", "data_path"]), "test_data")
+                               char in os.listdir(training_data_path)[:train_limit]]
         self.test_data = [[np.load(os.path.join(test_data_path, char, instance)) 
                                for instance in os.listdir(os.path.join(test_data_path, char))] for 
-                               char in os.listdir(test_data_path)]
+                               char in os.listdir(test_data_path)[:test_limit]]
 
         self.data = self.training_data + self.test_data
         self.total_num_classes = len(self.data)
@@ -202,38 +210,8 @@ class OmniglotMAML(MAML):
         """
         If using fixed validation this method returns a set of tasks that are 
         'representative' of the task distribution in some meaningful way. 
-
-        In the case of sinusoidal regression we split the parameter space equally.
         """
-        # mesh of equally partitioned state space
-        if self.task_type == 'sin3d':
-            amplitude_spectrum, phase_spectrum, frequency_spectrum = np.mgrid[
-                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.validation_block_sizes[0],
-                self.phase_bounds[0]:self.phase_bounds[1]:self.validation_block_sizes[1],
-                self.frequency_bounds[0]:self.frequency_bounds[1]:self.validation_block_sizes[2]
-                ]
-            parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten(), frequency_spectrum.flatten())).T
-        else:
-            amplitude_spectrum, phase_spectrum = np.mgrid[
-                self.amplitude_bounds[0]:self.amplitude_bounds[1]:self.validation_block_sizes[0],
-                self.phase_bounds[0]:self.phase_bounds[1]:self.validation_block_sizes[1]
-                ]
-            parameter_space_tuples = np.vstack((amplitude_spectrum.flatten(), phase_spectrum.flatten())).T
-
-        fixed_validation_tasks = []
-
-        def generate_sin(amplitude, phase, frequency=1):
-            def modified_sin(x):
-                return amplitude * np.sin(phase + frequency * x)
-            return modified_sin
-
-        for param_pair in parameter_space_tuples:
-            if self.task_type == 'sin3d':
-                fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1], frequency=param_pair[2]))
-            else:
-                fixed_validation_tasks.append(generate_sin(amplitude=param_pair[0], phase=param_pair[1]))
-
-        return parameter_space_tuples, fixed_validation_tasks
+        raise NotImplementedError
 
     def _compute_loss(self, prediction, ground_truth):
         loss_function = nn.CrossEntropyLoss()
@@ -298,6 +276,7 @@ class OmniglotNetwork(ModelNetwork):
     def forward(self, x):
 
         for l in range(0, len(self._weights) - 1, 2):
+
             x = F.conv2d(x, self._weights[l], self._biases[l], stride=self.stride_mag, padding=self.padding_mag)
             
             input_mean = torch.mean(x, dim=[0, 2, 3]).to(self.device).detach()
@@ -308,7 +287,7 @@ class OmniglotNetwork(ModelNetwork):
                 )
             x = F.relu(x)
 
-        x = x.reshape((25, -1))
+        x = x.view(x.size(0), -1)
         x = F.softmax(F.linear(x, self._weights[-1].t(), self._biases[-1]), dim=1)
 
         return x
