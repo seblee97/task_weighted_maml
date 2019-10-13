@@ -281,6 +281,9 @@ class MAML(ABC):
         # make step in outer model optimiser
         updated_optimiser = self.optimiser_update(step_count, gradients, optimiser_state)
 
+        del gradients
+        del parameters 
+
         return updated_optimiser, parameters
 
     def fast_outer_training_loop(self):
@@ -411,6 +414,13 @@ class MAML(ABC):
                 validation_figures.append(validation_fig)
                 self.writer.add_figure("vadliation_plots/repeat_{}".format(r), validation_fig, step_count)
 
+            del validation_model_iterations
+            del network_parameters
+            del validation_x_batch
+            del validation_y_batch
+            del test_x_batch
+            del test_y_batch
+
         mean_validation_loss = onp.mean(validation_losses)
         var_validation_loss = onp.std(validation_losses)
         mean_validation_accuracies = onp.mean(validation_accuracies)
@@ -447,6 +457,15 @@ class MAML(ABC):
                 self.writer.add_figure("queue_counts", priority_queue_count_fig, step_count)
             if priority_queue_loss_dist_fig:
                 self.writer.add_figure("queue_loss_dist", priority_queue_loss_dist_fig, step_count)
+
+        del validation_losses 
+        del validation_figures
+        del validation_accuracies
+        del validation_parameter_tuples
+        del validation_tasks
+        
+        del validation_loss_distribution_fig
+
 
     @abstractmethod
     def _visualise(
