@@ -57,15 +57,23 @@ class ModelNetwork(nn.Module):
         Reset all parameters in network using unifrom Gaussian initialisation
         """
         for l in range(len(self._weights)):
+            if len(self._weights[l].shape) > 2:
+                torch.nn.init.xavier_uniform(self._weights[l], gain=nn.init.calculate_gain('relu', self._weights[l]))
+            elif len(self._weights[l].shape) == 2:
+                torch.nn.init.xavier_uniform(self._weights[l], gain=nn.init.calculate_gain('linear', self._weights[l]))
+            elif len(self._weights[l].shape) == 1:
+                # batch norm weight layers
+                self._weights[l].data.fill_(1)
+            # torch.nn.init.xavier_uniform(self._biases[l])
             # if type(self.layer_dimensions[l]) == int:
             #     std = 1. / np.sqrt(self.layer_dimensions[l])
             # elif type(self.layer_dimensions[l]) == list:
             #     std = 1. / np.sqrt(np.prod(self.layer_dimensions[l]))
             # elif type(self.layer_dimensions[l]) == np.ndarray:
             #     std = 1. / np.sqrt(np.prod(self.layer_dimensions[l]))
-            std = 1. / np.sqrt(np.prod(self._weights[l].shape))
-            self._weights[l].data.uniform_(-std, std) # uniform Gaussian initialisation
-            self._biases[l].data.uniform_(-std, std)
+            # std = 1. / np.sqrt(np.prod(self._weights[l].shape))
+            # self._weights[l].data.uniform_(-std, std) # uniform Gaussian initialisation
+            # self._biases[l].data.uniform_(-std, std)
 
 
 class MAML(ABC):
@@ -212,19 +220,23 @@ class MAML(ABC):
         meta_update_gradient = [0 for _ in range(len(weight_copies) + len(bias_copies))]
 
         meta_loss = []
+        meta_accuracies = []
         task_importance_weights = []
 
         for _ in range(self.task_batch_size):
-            task_meta_gradient, task_loss, importance_weight = self.inner_training_loop(step_count, weight_copies, bias_copies)
+            task_meta_gradient, task_loss, importance_weight, accuracy = self.inner_training_loop(step_count, weight_copies, bias_copies)
             meta_loss.append(task_loss) 
+            meta_accuracies.append(accuracy)
             task_importance_weights.append(importance_weight)
             for i in range(len(weight_copies) + len(bias_copies)):
                 meta_update_gradient[i] += importance_weight * task_meta_gradient[i].detach()
 
         print("loss: ", float(np.mean(meta_loss)))
+        print("accuracy:", float(np.mean(meta_accuracies)))
 
         self.writer.add_scalar('meta_metrics/meta_update_loss_mean', np.mean(meta_loss), step_count)
         self.writer.add_scalar('meta_metrics/meta_update_loss_std', np.std(meta_loss), step_count)
+        self.writer.add_scalar('meta_metrics/meta_accuracies_mean', np.mean(meta_accuracies), step_count)
         self.writer.add_scalar('queue_metrics/importance_weights_mean', np.mean(task_importance_weights), step_count)
 
         # meta update
@@ -232,10 +244,12 @@ class MAML(ABC):
         self.meta_optimiser.zero_grad()
 
         for i in range(len(self.model_outer._weights)):
-            self.model_outer._weights[i].grad = meta_update_gradient[i] / self.task_batch_size
+            unclipped_grad = meta_update_gradient[i] / self.task_batch_size
+            self.model_outer._weights[i].grad = unclipped_grad
             meta_update_gradient[i] = 0
         for j in range(len(self.model_outer._biases)):
-            self.model_outer._biases[j].grad = meta_update_gradient[i + j + 1] / self.task_batch_size
+            unclipped_grad = meta_update_gradient[i + j + 1] / self.task_batch_size
+            self.model_outer._biases[j].grad = unclipped_grad
             meta_update_gradient[i + j + 1] = 0
 
         self.meta_optimiser.step()
@@ -305,7 +319,13 @@ class MAML(ABC):
 
         # compute loss
         meta_update_loss = self._compute_loss(meta_update_prediction, meta_update_samples_y)
-
+        if self.is_classification:
+            accuracy = self._get_accuracy(meta_update_prediction, meta_update_samples_y)
+        else:
+            accuracy = None
+        # print("----------- meta_update_loss", meta_update_loss)
+        # print("----------- accuracy", accuracy)
+        
         if self.priority_sample:
             # print("----------- max_indices", max_indices)
             # print("----------- task_parameters", task_parameters)
@@ -323,7 +343,7 @@ class MAML(ABC):
         else:
             importance_weight = 1.
 
-        return meta_update_grad, individual_loss, importance_weight
+        return meta_update_grad, individual_loss, importance_weight, accuracy
 
 
     def train(self) -> None:
