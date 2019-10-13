@@ -304,6 +304,8 @@ class OmniglotMAML(MAML):
                 prediction_axis = fig.add_subplot(grid_spec[self.N + 1 + i, :])
                 prediction_axis.imshow(accuracy_matrix, cmap='RdYlGn', vmin=0, vmax=1)
 
+        plt.close()
+
         return fig
 
     def _get_fixed_validation_tasks(self):
