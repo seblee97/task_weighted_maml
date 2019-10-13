@@ -55,6 +55,8 @@ if __name__ == "__main__":
     
     if torch.cuda.is_available() and maml_parameters.get('use_gpu'):
         print("Using the GPU")
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
         maml_parameters.set_property("device", "cuda")
         experiment_device = torch.device("cuda:{}".format(args.gpu_id))
     else:
