@@ -52,29 +52,12 @@ class ModelNetwork(nn.Module):
         """
         raise NotImplementedError("Base class abstract method")
 
+    @abstractmethod
     def _reset_parameters(self) -> None:
         """
         Reset all parameters in network using unifrom Gaussian initialisation
         """
-        for l in range(len(self._weights)):
-            if len(self._weights[l].shape) > 2:
-                torch.nn.init.xavier_uniform(self._weights[l], gain=nn.init.calculate_gain('relu', self._weights[l]))
-            elif len(self._weights[l].shape) == 2:
-                torch.nn.init.xavier_uniform(self._weights[l], gain=nn.init.calculate_gain('linear', self._weights[l]))
-            elif len(self._weights[l].shape) == 1:
-                # batch norm weight layers
-                self._weights[l].data.fill_(1)
-            # torch.nn.init.xavier_uniform(self._biases[l])
-            # if type(self.layer_dimensions[l]) == int:
-            #     std = 1. / np.sqrt(self.layer_dimensions[l])
-            # elif type(self.layer_dimensions[l]) == list:
-            #     std = 1. / np.sqrt(np.prod(self.layer_dimensions[l]))
-            # elif type(self.layer_dimensions[l]) == np.ndarray:
-            #     std = 1. / np.sqrt(np.prod(self.layer_dimensions[l]))
-            # std = 1. / np.sqrt(np.prod(self._weights[l].shape))
-            # self._weights[l].data.uniform_(-std, std) # uniform Gaussian initialisation
-            # self._biases[l].data.uniform_(-std, std)
-
+        raise NotImplementedError("Base class method")
 
 class MAML(ABC):
 
@@ -232,11 +215,12 @@ class MAML(ABC):
                 meta_update_gradient[i] += importance_weight * task_meta_gradient[i].detach()
 
         print("loss: ", float(np.mean(meta_loss)))
-        print("accuracy:", float(np.mean(meta_accuracies)))
+        if self.is_classification:
+            print("accuracy:", float(np.mean(meta_accuracies)))
+            self.writer.add_scalar('meta_metrics/meta_accuracies_mean', np.mean(meta_accuracies), step_count)
 
         self.writer.add_scalar('meta_metrics/meta_update_loss_mean', np.mean(meta_loss), step_count)
         self.writer.add_scalar('meta_metrics/meta_update_loss_std', np.std(meta_loss), step_count)
-        self.writer.add_scalar('meta_metrics/meta_accuracies_mean', np.mean(meta_accuracies), step_count)
         self.writer.add_scalar('queue_metrics/importance_weights_mean', np.mean(task_importance_weights), step_count)
 
         # meta update
