@@ -245,6 +245,18 @@ class SinusoidalNetwork(ModelNetwork):
 
         return y
 
+    def _reset_parameters(self):
+        for l in range(len(self._weights)):
+            if type(self.layer_dimensions[l]) == int:
+                std = 1. / np.sqrt(self.layer_dimensions[l])
+            elif type(self.layer_dimensions[l]) == list:
+                std = 1. / np.sqrt(np.prod(self.layer_dimensions[l]))
+            elif type(self.layer_dimensions[l]) == np.ndarray:
+                std = 1. / np.sqrt(np.prod(self.layer_dimensions[l]))
+            std = 1. / np.sqrt(np.prod(self._weights[l].shape))
+            self._weights[l].data.uniform_(-std, std) # uniform Gaussian initialisation
+            self._biases[l].data.uniform_(-std, std)
+
 
 class SinePriorityQueue(PriorityQueue):
 
