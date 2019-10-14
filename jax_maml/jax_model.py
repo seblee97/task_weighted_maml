@@ -281,8 +281,7 @@ class MAML(ABC):
         # make step in outer model optimiser
         updated_optimiser = self.optimiser_update(step_count, gradients, optimiser_state)
 
-        del gradients
-        del parameters 
+        del gradients 
 
         return updated_optimiser, parameters
 
