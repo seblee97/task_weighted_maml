@@ -18,7 +18,7 @@ validation_k:                 5                                # number of point
 test_k:                       5                                # number of points given as test after fine-tuning
 validation_task_batch_size:   50                               # number of tasks to sample and evaluate in each validation loop
 validation_frequency:         100                              # frequency with which to perform validation during training
-visualisation_frequency:      100                              # frequency with which to perform visualisation of validation (including logging graphs to tb)
+visualisation_frequency:      400                              # frequency with which to perform visualisation of validation (including logging graphs to tb)
 visualise_all:                False                            # whether to visualise all updates of test fine-tuning or just final solution
 x_dim:                        1                                # dimension of x input 
 input_dimension:              [28, 28, 1]                      # dimension of network input (image_wdith, image_height, num_channels)
@@ -42,7 +42,7 @@ sin3d:
   fixed_val_blocks:           [0.2, 10, 0.2]                   # granularity of grid used to generate fixed interval validatio tasks
 
 omniglot:
-  data_path:                   /Users/sebastianlee/Dropbox/Documents/Work/Research/maml/data/
+  data_path:                   /data/home/ischien/task_weighted_maml/data/
   n_train:                     1200                           # number of images to use for training      
   image_output_shape:          [28, 28]                       # shape of downsampled image for training and testing
   examples_per_class:          80                             # number of examples of each class (includes any data augmentation)
