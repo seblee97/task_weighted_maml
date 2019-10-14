@@ -345,14 +345,13 @@ class OmniglotPriorityQueue(PriorityQueue):
                 first_approx -= 1
             return (int(first_approx), int(N / first_approx))
 
-        import pdb; pdb.set_trace()
         if type(self._queue) == onp.ndarray:
             if len(self._queue.shape) <= 2:
 
                 if feature == 'losses':
                     plot_queue = copy.deepcopy(self._queue)
                 elif feature == 'counts':
-                    plot_queue = copy.deepcopy(sample_counts)
+                    plot_queue = copy.deepcopy(self.sample_counts)
                 else:
                     raise ValueError("feature type not recognised. Use 'losses' or 'counts'")
 
