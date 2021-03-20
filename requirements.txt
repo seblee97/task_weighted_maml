@@ -18,7 +18,7 @@ ipython-genutils==0.2.0
 jax==0.1.43
 jaxlib==0.1.26
 jedi==0.14.1
-Jinja2==2.10.1
+Jinja2==2.11.3
 joblib==0.13.2
 json5==0.8.5
 jsonschema==3.0.2
